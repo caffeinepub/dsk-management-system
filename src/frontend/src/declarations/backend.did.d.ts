@@ -131,6 +131,7 @@ export interface _SERVICE {
   'addDocumentLibraryItem' : ActorMethod<[DocumentLibraryInput], string>,
   'addExpense' : ActorMethod<[ExpenseInput], string>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'claimFirstAdmin' : ActorMethod<[], boolean>,
   'createCustomer' : ActorMethod<[CustomerInput], string>,
   'deleteDocumentLibraryItem' : ActorMethod<[string], boolean>,
   'deleteExpense' : ActorMethod<[string], boolean>,

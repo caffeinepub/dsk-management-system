@@ -1,32 +1,29 @@
+import Time "mo:core/Time";
+import Principal "mo:core/Principal";
+import Array "mo:core/Array";
+import Runtime "mo:core/Runtime";
+import Map "mo:core/Map";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
-import Map "mo:core/Map";
+import Migration "migration";
 import Nat "mo:core/Nat";
+import Text "mo:core/Text";
+import Float "mo:core/Float";
 import Int "mo:core/Int";
 import Order "mo:core/Order";
-import Text "mo:core/Text";
-import Runtime "mo:core/Runtime";
-import Array "mo:core/Array";
-import Time "mo:core/Time";
 import List "mo:core/List";
-import Float "mo:core/Float";
-import Principal "mo:core/Principal";
 
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
-  // Keep accessControlState for stable variable compatibility with previous versions
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
   // Types
-  type Status = {
-    #pending;
-    #in_process;
-    #completed;
-  };
+  type Status = { #pending; #in_process; #completed };
 
   module Status {
     public func toText(status : Status) : Text {
@@ -160,10 +157,10 @@ actor {
   };
 
   // State
-  let customers = Map.empty<Text, CustomerRecord>();
-  let expenses = Map.empty<Text, ExpenseRecord>();
-  let documentLibrary = Map.empty<Text, DocumentLibraryItem>();
-  let customServices = Map.empty<Text, CustomServiceEntry>();
+  var customers = Map.empty<Text, CustomerRecord>();
+  var expenses = Map.empty<Text, ExpenseRecord>();
+  var documentLibrary = Map.empty<Text, DocumentLibraryItem>();
+  var customServices = Map.empty<Text, CustomServiceEntry>();
   var customerCount = 0;
   var expenseCount = 0;
   var docCount = 0;

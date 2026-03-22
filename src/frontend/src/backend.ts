@@ -204,6 +204,7 @@ export interface backendInterface {
     addDocumentLibraryItem(input: DocumentLibraryInput): Promise<string>;
     addExpense(input: ExpenseInput): Promise<string>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    claimFirstAdmin(): Promise<boolean>;
     createCustomer(input: CustomerInput): Promise<string>;
     deleteDocumentLibraryItem(id: string): Promise<boolean>;
     deleteExpense(id: string): Promise<boolean>;
@@ -220,7 +221,6 @@ export interface backendInterface {
     listExpenses(): Promise<Array<ExpenseRecord>>;
     restoreCustomer(tokenId: string): Promise<boolean>;
     softDeleteCustomer(tokenId: string): Promise<boolean>;
-    claimFirstAdmin(): Promise<boolean>;
     updateCustomer(tokenId: string, input: CustomerInput): Promise<boolean>;
 }
 import type { CustomerInput as _CustomerInput, CustomerRecord as _CustomerRecord, DocumentLibraryInput as _DocumentLibraryInput, DocumentLibraryItem as _DocumentLibraryItem, ExternalBlob as _ExternalBlob, Status as _Status, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
@@ -377,6 +377,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n11(this._uploadFile, this._downloadFile, arg1));
+            return result;
+        }
+    }
+    async claimFirstAdmin(): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.claimFirstAdmin();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.claimFirstAdmin();
             return result;
         }
     }
@@ -617,10 +631,6 @@ export class Backend implements backendInterface {
             const result = await this.actor.updateCustomer(arg0, await to_candid_CustomerInput_n13(this._uploadFile, this._downloadFile, arg1));
             return result;
         }
-    }
-    async claimFirstAdmin(): Promise<boolean> {
-        const result = await this.actor.claimFirstAdmin();
-        return result;
     }
 }
 async function from_candid_CustomerRecord_n20(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CustomerRecord): Promise<CustomerRecord> {

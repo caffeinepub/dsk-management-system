@@ -1,22 +1,24 @@
 # DSK Management System
 
 ## Current State
-The app uses Internet Identity for auth with role-based admin access. The `claimFirstAdmin()` function sets a principal as admin, but Internet Identity issues different principals per origin (URL), causing "Unauthorized" errors when accessing from the live URL vs. the Caffeine editor URL.
+The backend stores all data (customers, expenses, document library, custom services) in non-stable Map variables. This means every canister upgrade (new deployment) wipes all data. Counter variables are also not stable.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- `stable var` arrays for all data collections (customers, expenses, documentLibrary, customServices)
+- `stable var` for counter variables (customerCount, expenseCount, docCount)
+- `system func preupgrade()` to save all Map data to stable arrays before upgrade
+- `system func postupgrade()` to restore Map data from stable arrays after upgrade, then clear stable arrays to free memory
 
 ### Modify
-- Backend: Remove admin role checks. Replace all `AccessControl.isAdmin(...)` checks with `not caller.isAnonymous()` -- any logged-in user can perform all operations. This is safe since it's a personal single-user app.
-- Remove dependency on `claimFirstAdmin()` / `adminAssigned` state.
-- Frontend: No changes needed for login flow. Remove any `claimFirstAdmin()` calls since they're no longer needed.
+- All data maps initialized from stable arrays on startup instead of always empty
 
 ### Remove
-- `claimFirstAdmin()` function (or keep as no-op for compatibility)
-- `accessControlState.adminAssigned` check
+- Nothing
 
 ## Implementation Plan
-1. Rewrite backend: replace admin checks with anonymous check
-2. Update frontend to remove claimFirstAdmin calls
+1. Add stable backing arrays for each Map
+2. Make counter variables stable
+3. Initialize maps from stable arrays
+4. Add preupgrade/postupgrade system hooks to persist data across upgrades

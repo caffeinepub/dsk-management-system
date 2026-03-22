@@ -107,7 +107,6 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    _initializeAccessControlWithSecret(secret: string): Promise<void>;
     addCustomService(name: string, category: string): Promise<boolean>;
     addDocumentLibraryItem(input: DocumentLibraryInput): Promise<string>;
     addExpense(input: ExpenseInput): Promise<string>;
