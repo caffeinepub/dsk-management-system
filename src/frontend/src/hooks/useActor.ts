@@ -28,9 +28,6 @@ export function useActor() {
       const actor = await createActorWithConfig(actorOptions);
       const adminToken = getSecretParameter("caffeineAdminToken") || "";
       await actor._initializeAccessControlWithSecret(adminToken);
-      // If no admin has been claimed yet, the logged-in user becomes admin.
-      // This handles the case where the app is opened directly (without admin token in URL).
-      await actor.claimFirstAdmin();
       return actor;
     },
     // Only refetch when identity changes

@@ -17,6 +17,7 @@ import Principal "mo:core/Principal";
 actor {
   include MixinStorage();
 
+  // Keep accessControlState for stable variable compatibility with previous versions
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
@@ -167,6 +168,11 @@ actor {
   var expenseCount = 0;
   var docCount = 0;
 
+  // Helper: any logged-in (non-anonymous) user is allowed
+  func isAuthenticated(caller : Principal) : Bool {
+    not caller.isAnonymous();
+  };
+
   // Helper function to add leading zeros to a Nat
   func addLeadingZeros(number : Nat, totalDigits : Nat) : Text {
     let numberText = number.toText();
@@ -198,29 +204,19 @@ actor {
   };
 
   func getStartOfMonth(timestamp : Int) : Int {
-    // Simplified: approximate month as 30 days
     let nanosPerDay = 86_400_000_000_000;
     let nanosPerMonth = nanosPerDay * 30;
     (timestamp / nanosPerMonth) * nanosPerMonth;
   };
 
-  // First-time setup: allows the first logged-in user to become admin
-  // Returns true if successfully claimed admin, false if admin already exists
+  // Always returns true for any authenticated caller
   public shared ({ caller }) func claimFirstAdmin() : async Bool {
-    if (caller.isAnonymous()) {
-      return false;
-    };
-    if (accessControlState.adminAssigned) {
-      return false;
-    };
-    accessControlState.userRoles.add(caller, #admin);
-    accessControlState.adminAssigned := true;
-    true;
+    isAuthenticated(caller);
   };
 
   public shared ({ caller }) func createCustomer(input : CustomerInput) : async Text {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can create customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     let tokenId = generateTokenId();
     let now = currentTimestamp();
@@ -255,8 +251,8 @@ actor {
   };
 
   public shared ({ caller }) func updateCustomer(tokenId : Text, input : CustomerInput) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can update customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     switch (customers.get(tokenId)) {
       case (null) { Runtime.trap("Customer not found") };
@@ -292,8 +288,8 @@ actor {
   };
 
   public query ({ caller }) func getCustomer(tokenId : Text) : async CustomerRecord {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     switch (customers.get(tokenId)) {
       case (null) { Runtime.trap("Customer not found") };
@@ -302,22 +298,22 @@ actor {
   };
 
   public query ({ caller }) func listCustomers() : async [CustomerRecord] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     customers.values().toArray().sort();
   };
 
   public query ({ caller }) func listDeletedCustomers() : async [CustomerRecord] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list deleted customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     customers.values().toArray().filter(func(c) { c.isDeleted }).sort();
   };
 
   public shared ({ caller }) func softDeleteCustomer(tokenId : Text) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can delete customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     switch (customers.get(tokenId)) {
       case (null) { Runtime.trap("Customer not found") };
@@ -330,8 +326,8 @@ actor {
   };
 
   public shared ({ caller }) func restoreCustomer(tokenId : Text) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can restore customers");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     switch (customers.get(tokenId)) {
       case (null) { Runtime.trap("Customer not found") };
@@ -344,8 +340,8 @@ actor {
   };
 
   public query ({ caller }) func getProfitSummary() : async ProfitSummary {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view profit summary");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     let now = currentTimestamp();
     let startOfToday = getStartOfDay(now);
@@ -375,8 +371,8 @@ actor {
   };
 
   public query ({ caller }) func getUpcomingRenewals(daysAhead : Nat) : async [CustomerRecord] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view upcoming renewals");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     let now = currentTimestamp();
     let nanosPerDay = 86_400_000_000_000;
@@ -394,7 +390,6 @@ actor {
       };
     });
 
-    // Sort by expiry date (soonest first)
     renewals.sort(func(a : CustomerRecord, b : CustomerRecord) : Order.Order {
       switch (a.expiryDate, b.expiryDate) {
         case (?expA, ?expB) { Int.compare(expA, expB) };
@@ -406,8 +401,8 @@ actor {
   };
 
   public shared ({ caller }) func addExpense(input : ExpenseInput) : async Text {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can add expenses");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     expenseCount += 1;
     let id = "EXP-" # addLeadingZeros(expenseCount, 3);
@@ -427,15 +422,15 @@ actor {
   };
 
   public query ({ caller }) func listExpenses() : async [ExpenseRecord] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list expenses");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     expenses.values().toArray().sort();
   };
 
   public query ({ caller }) func getExpenseSummary() : async ExpenseSummary {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view expense summary");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     let now = currentTimestamp();
     let startOfToday = getStartOfDay(now);
@@ -463,8 +458,8 @@ actor {
   };
 
   public shared ({ caller }) func deleteExpense(id : Text) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can delete expenses");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     if (expenses.containsKey(id)) {
       expenses.remove(id);
@@ -475,8 +470,8 @@ actor {
   };
 
   public shared ({ caller }) func addDocumentLibraryItem(input : DocumentLibraryInput) : async Text {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can add document library items");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     docCount += 1;
     let id = "DOC-" # addLeadingZeros(docCount, 3);
@@ -495,15 +490,15 @@ actor {
   };
 
   public query ({ caller }) func listDocumentLibraryItems() : async [DocumentLibraryItem] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list document library items");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     documentLibrary.values().toArray().sort();
   };
 
   public shared ({ caller }) func deleteDocumentLibraryItem(id : Text) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can delete document library items");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     if (documentLibrary.containsKey(id)) {
       documentLibrary.remove(id);
@@ -514,15 +509,15 @@ actor {
   };
 
   public query ({ caller }) func listCustomServices() : async [CustomServiceEntry] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can list custom services");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     customServices.values().toArray().sort();
   };
 
   public shared ({ caller }) func addCustomService(name : Text, category : Text) : async Bool {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can add custom services");
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
     };
     let now = currentTimestamp();
 
