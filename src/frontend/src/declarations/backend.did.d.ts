@@ -93,9 +93,34 @@ export interface ProfitSummary {
   'thisMonth' : number,
   'totalNetProfit' : number,
 }
+export interface RenewalInput {
+  'documentBlob' : [] | [ExternalBlob],
+  'serviceName' : string,
+  'govtFees' : number,
+  'serviceCharge' : number,
+  'nextExpiryDate' : bigint,
+  'advancePaid' : number,
+  'customerId' : string,
+  'renewalDate' : bigint,
+}
+export interface RenewalRecord {
+  'id' : string,
+  'documentBlob' : [] | [ExternalBlob],
+  'serviceName' : string,
+  'govtFees' : number,
+  'serviceCharge' : number,
+  'createdAt' : bigint,
+  'totalCharged' : number,
+  'nextExpiryDate' : bigint,
+  'advancePaid' : number,
+  'balanceDue' : number,
+  'customerId' : string,
+  'renewalDate' : bigint,
+}
 export type Status = { 'pending' : null } |
   { 'completed' : null } |
   { 'in_process' : null };
+export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -130,16 +155,20 @@ export interface _SERVICE {
   'addCustomService' : ActorMethod<[string, string], boolean>,
   'addDocumentLibraryItem' : ActorMethod<[DocumentLibraryInput], string>,
   'addExpense' : ActorMethod<[ExpenseInput], string>,
+  'addRenewalRecord' : ActorMethod<[RenewalInput], string>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'claimFirstAdmin' : ActorMethod<[], boolean>,
   'createCustomer' : ActorMethod<[CustomerInput], string>,
   'deleteDocumentLibraryItem' : ActorMethod<[string], boolean>,
   'deleteExpense' : ActorMethod<[string], boolean>,
+  'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCustomer' : ActorMethod<[string], CustomerRecord>,
+  'getCustomerRenewalHistory' : ActorMethod<[string], Array<RenewalRecord>>,
   'getExpenseSummary' : ActorMethod<[], ExpenseSummary>,
   'getProfitSummary' : ActorMethod<[], ProfitSummary>,
   'getUpcomingRenewals' : ActorMethod<[bigint], Array<CustomerRecord>>,
+  'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listCustomServices' : ActorMethod<[], Array<CustomServiceEntry>>,
   'listCustomers' : ActorMethod<[], Array<CustomerRecord>>,
@@ -147,6 +176,7 @@ export interface _SERVICE {
   'listDocumentLibraryItems' : ActorMethod<[], Array<DocumentLibraryItem>>,
   'listExpenses' : ActorMethod<[], Array<ExpenseRecord>>,
   'restoreCustomer' : ActorMethod<[string], boolean>,
+  'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'softDeleteCustomer' : ActorMethod<[string], boolean>,
   'updateCustomer' : ActorMethod<[string, CustomerInput], boolean>,
 }

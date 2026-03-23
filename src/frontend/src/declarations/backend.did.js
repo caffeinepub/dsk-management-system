@@ -31,6 +31,16 @@ export const ExpenseInput = IDL.Record({
   'category' : IDL.Text,
   'amount' : IDL.Float64,
 });
+export const RenewalInput = IDL.Record({
+  'documentBlob' : IDL.Opt(ExternalBlob),
+  'serviceName' : IDL.Text,
+  'govtFees' : IDL.Float64,
+  'serviceCharge' : IDL.Float64,
+  'nextExpiryDate' : IDL.Int,
+  'advancePaid' : IDL.Float64,
+  'customerId' : IDL.Text,
+  'renewalDate' : IDL.Int,
+});
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
   'user' : IDL.Null,
@@ -58,6 +68,7 @@ export const CustomerInput = IDL.Record({
   'documentBlobIds' : IDL.Vec(ExternalBlob),
   'customServiceName' : IDL.Opt(IDL.Text),
 });
+export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 export const CustomerRecord = IDL.Record({
   'serviceType' : IDL.Text,
   'serviceCategory' : IDL.Text,
@@ -81,6 +92,20 @@ export const CustomerRecord = IDL.Record({
   'netProfit' : IDL.Float64,
   'documentBlobIds' : IDL.Vec(ExternalBlob),
   'customServiceName' : IDL.Opt(IDL.Text),
+});
+export const RenewalRecord = IDL.Record({
+  'id' : IDL.Text,
+  'documentBlob' : IDL.Opt(ExternalBlob),
+  'serviceName' : IDL.Text,
+  'govtFees' : IDL.Float64,
+  'serviceCharge' : IDL.Float64,
+  'createdAt' : IDL.Int,
+  'totalCharged' : IDL.Float64,
+  'nextExpiryDate' : IDL.Int,
+  'advancePaid' : IDL.Float64,
+  'balanceDue' : IDL.Float64,
+  'customerId' : IDL.Text,
+  'renewalDate' : IDL.Int,
 });
 export const ExpenseSummary = IDL.Record({
   'today' : IDL.Float64,
@@ -144,18 +169,30 @@ export const idlService = IDL.Service({
   'addCustomService' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'addDocumentLibraryItem' : IDL.Func([DocumentLibraryInput], [IDL.Text], []),
   'addExpense' : IDL.Func([ExpenseInput], [IDL.Text], []),
+  'addRenewalRecord' : IDL.Func([RenewalInput], [IDL.Text], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'claimFirstAdmin' : IDL.Func([], [IDL.Bool], []),
   'createCustomer' : IDL.Func([CustomerInput], [IDL.Text], []),
   'deleteDocumentLibraryItem' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'deleteExpense' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCustomer' : IDL.Func([IDL.Text], [CustomerRecord], ['query']),
+  'getCustomerRenewalHistory' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(RenewalRecord)],
+      ['query'],
+    ),
   'getExpenseSummary' : IDL.Func([], [ExpenseSummary], ['query']),
   'getProfitSummary' : IDL.Func([], [ProfitSummary], ['query']),
   'getUpcomingRenewals' : IDL.Func(
       [IDL.Nat],
       [IDL.Vec(CustomerRecord)],
+      ['query'],
+    ),
+  'getUserProfile' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(UserProfile)],
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
@@ -169,6 +206,7 @@ export const idlService = IDL.Service({
     ),
   'listExpenses' : IDL.Func([], [IDL.Vec(ExpenseRecord)], ['query']),
   'restoreCustomer' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'softDeleteCustomer' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'updateCustomer' : IDL.Func([IDL.Text, CustomerInput], [IDL.Bool], []),
 });
@@ -199,6 +237,16 @@ export const idlFactory = ({ IDL }) => {
     'category' : IDL.Text,
     'amount' : IDL.Float64,
   });
+  const RenewalInput = IDL.Record({
+    'documentBlob' : IDL.Opt(ExternalBlob),
+    'serviceName' : IDL.Text,
+    'govtFees' : IDL.Float64,
+    'serviceCharge' : IDL.Float64,
+    'nextExpiryDate' : IDL.Int,
+    'advancePaid' : IDL.Float64,
+    'customerId' : IDL.Text,
+    'renewalDate' : IDL.Int,
+  });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
     'user' : IDL.Null,
@@ -226,6 +274,7 @@ export const idlFactory = ({ IDL }) => {
     'documentBlobIds' : IDL.Vec(ExternalBlob),
     'customServiceName' : IDL.Opt(IDL.Text),
   });
+  const UserProfile = IDL.Record({ 'name' : IDL.Text });
   const CustomerRecord = IDL.Record({
     'serviceType' : IDL.Text,
     'serviceCategory' : IDL.Text,
@@ -249,6 +298,20 @@ export const idlFactory = ({ IDL }) => {
     'netProfit' : IDL.Float64,
     'documentBlobIds' : IDL.Vec(ExternalBlob),
     'customServiceName' : IDL.Opt(IDL.Text),
+  });
+  const RenewalRecord = IDL.Record({
+    'id' : IDL.Text,
+    'documentBlob' : IDL.Opt(ExternalBlob),
+    'serviceName' : IDL.Text,
+    'govtFees' : IDL.Float64,
+    'serviceCharge' : IDL.Float64,
+    'createdAt' : IDL.Int,
+    'totalCharged' : IDL.Float64,
+    'nextExpiryDate' : IDL.Int,
+    'advancePaid' : IDL.Float64,
+    'balanceDue' : IDL.Float64,
+    'customerId' : IDL.Text,
+    'renewalDate' : IDL.Int,
   });
   const ExpenseSummary = IDL.Record({
     'today' : IDL.Float64,
@@ -312,18 +375,30 @@ export const idlFactory = ({ IDL }) => {
     'addCustomService' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'addDocumentLibraryItem' : IDL.Func([DocumentLibraryInput], [IDL.Text], []),
     'addExpense' : IDL.Func([ExpenseInput], [IDL.Text], []),
+    'addRenewalRecord' : IDL.Func([RenewalInput], [IDL.Text], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'claimFirstAdmin' : IDL.Func([], [IDL.Bool], []),
     'createCustomer' : IDL.Func([CustomerInput], [IDL.Text], []),
     'deleteDocumentLibraryItem' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'deleteExpense' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCustomer' : IDL.Func([IDL.Text], [CustomerRecord], ['query']),
+    'getCustomerRenewalHistory' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(RenewalRecord)],
+        ['query'],
+      ),
     'getExpenseSummary' : IDL.Func([], [ExpenseSummary], ['query']),
     'getProfitSummary' : IDL.Func([], [ProfitSummary], ['query']),
     'getUpcomingRenewals' : IDL.Func(
         [IDL.Nat],
         [IDL.Vec(CustomerRecord)],
+        ['query'],
+      ),
+    'getUserProfile' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(UserProfile)],
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
@@ -341,6 +416,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'listExpenses' : IDL.Func([], [IDL.Vec(ExpenseRecord)], ['query']),
     'restoreCustomer' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'softDeleteCustomer' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'updateCustomer' : IDL.Func([IDL.Text, CustomerInput], [IDL.Bool], []),
   });

@@ -1,9 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, MessageCircle, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Eye,
+  MessageCircle,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
 import { type CustomerRecord, Status } from "../backend";
+import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -27,7 +36,7 @@ function statusLabel(status: Status): string {
   return "Completed";
 }
 function formatDate(ts?: bigint): string {
-  if (!ts) return "—";
+  if (!ts) return "\u2014";
   return new Date(Number(ts)).toLocaleDateString("en-IN");
 }
 
@@ -36,6 +45,9 @@ export function CustomerList({ navigate }: Props) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [renewCustomer, setRenewCustomer] = useState<CustomerRecord | null>(
+    null,
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -81,6 +93,7 @@ export function CustomerList({ navigate }: Props) {
         <Button
           onClick={() => navigate({ name: "customer-add" })}
           className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
+          data-ocid="customers.primary_button"
         >
           <Plus className="h-4 w-4 mr-1" /> Add Customer
         </Button>
@@ -94,12 +107,14 @@ export function CustomerList({ navigate }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+            data-ocid="customers.search_input"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm"
+          data-ocid="customers.select"
         >
           <option value="all">All Status</option>
           <option value={Status.pending}>Pending</option>
@@ -117,7 +132,10 @@ export function CustomerList({ navigate }: Props) {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
+            <div
+              className="text-center py-12 text-slate-400"
+              data-ocid="customers.empty_state"
+            >
               {active.length === 0 ? (
                 <>
                   <p>No customers yet.</p>
@@ -151,8 +169,12 @@ export function CustomerList({ navigate }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {filtered.map((c) => (
-                    <tr key={c.tokenId} className="hover:bg-slate-700/30">
+                  {filtered.map((c, idx) => (
+                    <tr
+                      key={c.tokenId}
+                      className="hover:bg-slate-700/30"
+                      data-ocid={`customers.item.${idx + 1}`}
+                    >
                       <td className="p-3 text-amber-400 font-mono text-xs font-bold">
                         {c.tokenId}
                       </td>
@@ -188,6 +210,7 @@ export function CustomerList({ navigate }: Props) {
                                 tokenId: c.tokenId,
                               })
                             }
+                            data-ocid={`customers.button.${idx + 1}`}
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
@@ -203,6 +226,16 @@ export function CustomerList({ navigate }: Props) {
                             }
                           >
                             <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Renew"
+                            className="h-7 w-7 text-slate-400 hover:text-amber-400"
+                            onClick={() => setRenewCustomer(c)}
+                            data-ocid={`customers.open_modal_button.${idx + 1}`}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -235,9 +268,20 @@ export function CustomerList({ navigate }: Props) {
           )}
         </CardContent>
       </Card>
+
       <p className="text-slate-500 text-xs text-right">
         {filtered.length} of {active.length} customers
       </p>
+
+      {/* Renewal Modal */}
+      {renewCustomer && (
+        <RenewalModal
+          open={!!renewCustomer}
+          onClose={() => setRenewCustomer(null)}
+          customer={renewCustomer}
+          onSuccess={() => setRenewCustomer(null)}
+        />
+      )}
     </div>
   );
 }

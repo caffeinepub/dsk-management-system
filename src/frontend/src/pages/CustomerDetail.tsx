@@ -2,14 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ExternalLink,
+  FileText,
   MessageCircle,
   Pencil,
   Printer,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
 import { Status } from "../backend";
+import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -38,17 +42,24 @@ function statusLabel(status: Status): string {
   return "Completed";
 }
 function formatDate(ts?: bigint): string {
-  if (!ts) return "—";
+  if (!ts) return "\u2014";
   return new Date(Number(ts)).toLocaleDateString("en-IN");
 }
 
 export function CustomerDetail({ navigate, tokenId }: Props) {
   const { actor } = useActor();
   const qc = useQueryClient();
+  const [renewModalOpen, setRenewModalOpen] = useState(false);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ["customer", tokenId],
     queryFn: () => actor!.getCustomer(tokenId),
+    enabled: !!actor,
+  });
+
+  const { data: renewalHistory, isLoading: historyLoading } = useQuery({
+    queryKey: ["renewal-history", tokenId],
+    queryFn: () => actor!.getCustomerRenewalHistory(tokenId),
     enabled: !!actor,
   });
 
@@ -95,7 +106,7 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
       <div class="field"><span class="label">Customer Name</span><span class="value">${c.name}</span></div>
       <div class="field"><span class="label">Phone</span><span class="value">${c.phone}</span></div>
       <div class="field"><span class="label">Service</span><span class="value">${c.serviceType}</span></div>
-      <div class="field"><span class="label">Application No</span><span class="value">${c.applicationNo ?? "—"}</span></div>
+      <div class="field"><span class="label">Application No</span><span class="value">${c.applicationNo ?? "\u2014"}</span></div>
       <div class="field"><span class="label">Application Date</span><span class="value">${formatDate(c.applicationDate)}</span></div>
       <div class="field"><span class="label">Status</span><span class="value">${statusLabel(c.currentStatus)}</span></div>
       <div class="total">
@@ -113,6 +124,7 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
 
   return (
     <div className="space-y-5 max-w-2xl">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button
@@ -130,12 +142,23 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
             </span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRenewModalOpen(true)}
+            className="border-amber-600 text-amber-400 hover:bg-amber-900/30"
+            data-ocid="customer.open_modal_button"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Renew
+          </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigate({ name: "customer-edit", tokenId })}
             className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            data-ocid="customer.edit_button"
           >
             <Pencil className="h-3.5 w-3.5 mr-1" />
             Edit
@@ -147,6 +170,7 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
               if (confirm("Delete?")) deleteMut.mutate();
             }}
             className="border-red-800 text-red-400 hover:bg-red-900/30"
+            data-ocid="customer.delete_button"
           >
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Delete
@@ -182,7 +206,7 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           <CardContent className="space-y-2 text-sm">
             <Row label="Name" value={c.name} />
             <Row label="Phone" value={c.phone} />
-            <Row label="App No" value={c.applicationNo ?? "—"} />
+            <Row label="App No" value={c.applicationNo ?? "\u2014"} />
           </CardContent>
         </Card>
 
@@ -224,18 +248,21 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           <CardContent className="space-y-2 text-sm">
             <Row
               label="Total Charged"
-              value={`₹${c.totalCharged.toFixed(2)}`}
+              value={`\u20b9${c.totalCharged.toFixed(2)}`}
             />
-            <Row label="Govt Fees" value={`₹${c.govtFees.toFixed(2)}`} />
+            <Row label="Govt Fees" value={`\u20b9${c.govtFees.toFixed(2)}`} />
             <Row
               label="Net Profit"
-              value={`₹${c.netProfit.toFixed(2)}`}
+              value={`\u20b9${c.netProfit.toFixed(2)}`}
               valueClass="text-green-400"
             />
-            <Row label="Advance Paid" value={`₹${c.advancePaid.toFixed(2)}`} />
+            <Row
+              label="Advance Paid"
+              value={`\u20b9${c.advancePaid.toFixed(2)}`}
+            />
             <Row
               label="Balance Due"
-              value={`₹${c.balanceDue.toFixed(2)}`}
+              value={`\u20b9${c.balanceDue.toFixed(2)}`}
               valueClass={c.balanceDue > 0 ? "text-red-400" : "text-green-400"}
             />
           </CardContent>
@@ -302,6 +329,124 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {/* Service & Payment History */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-white text-sm">
+            <FileText className="h-4 w-4 text-amber-400" />
+            Service & Payment History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {historyLoading ? (
+            <div className="p-4 space-y-2">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : !renewalHistory || renewalHistory.length === 0 ? (
+            <div
+              className="text-center py-8 text-slate-400 text-sm"
+              data-ocid="renewal-history.empty_state"
+            >
+              No renewal history yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-700 bg-slate-800/80">
+                    <th className="text-left p-3 font-medium">Date</th>
+                    <th className="text-left p-3 font-medium">Service</th>
+                    <th className="text-left p-3 font-medium">Govt Fees</th>
+                    <th className="text-left p-3 font-medium">Profit</th>
+                    <th className="text-left p-3 font-medium">Total</th>
+                    <th className="text-left p-3 font-medium">Advance</th>
+                    <th className="text-left p-3 font-medium">Balance</th>
+                    <th className="text-left p-3 font-medium">Document</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {renewalHistory.map((r, idx) => (
+                    <tr
+                      key={r.id}
+                      className="hover:bg-slate-700/30"
+                      data-ocid={`renewal-history.item.${idx + 1}`}
+                    >
+                      <td className="p-3 text-slate-300">
+                        {new Date(Number(r.renewalDate)).toLocaleDateString(
+                          "en-IN",
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="text-white">{r.serviceName}</div>
+                        <div className="text-slate-500">
+                          Next:{" "}
+                          {new Date(
+                            Number(r.nextExpiryDate),
+                          ).toLocaleDateString("en-IN")}
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-300">
+                        \u20b9{r.govtFees.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-green-400">
+                        \u20b9{r.serviceCharge.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-amber-400 font-semibold">
+                        \u20b9{r.totalCharged.toFixed(2)}
+                      </td>
+                      <td className="p-3 text-slate-300">
+                        \u20b9{r.advancePaid.toFixed(2)}
+                      </td>
+                      <td
+                        className={`p-3 font-semibold ${
+                          r.balanceDue > 0 ? "text-red-400" : "text-green-400"
+                        }`}
+                      >
+                        \u20b9{r.balanceDue.toFixed(2)}
+                      </td>
+                      <td className="p-3">
+                        {r.documentBlob ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-blue-400 hover:text-blue-300 h-6 px-2"
+                            onClick={() =>
+                              window.open(
+                                r.documentBlob!.getDirectURL(),
+                                "_blank",
+                              )
+                            }
+                          >
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                        ) : (
+                          <span className="text-slate-600">\u2014</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Renewal Modal */}
+      {renewModalOpen && (
+        <RenewalModal
+          open={renewModalOpen}
+          onClose={() => setRenewModalOpen(false)}
+          customer={c}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ["customer", tokenId] });
+          }}
+        />
       )}
     </div>
   );

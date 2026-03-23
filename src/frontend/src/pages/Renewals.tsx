@@ -1,14 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, MessageCircle } from "lucide-react";
+import { CalendarClock, MessageCircle, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import type { Page } from "../App";
 import type { CustomerRecord } from "../backend";
+import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { useActor } from "../hooks/useActor";
 
@@ -17,7 +14,7 @@ interface Props {
 }
 
 function formatDate(ts?: bigint): string {
-  if (!ts) return "—";
+  if (!ts) return "\u2014";
   return new Date(Number(ts)).toLocaleDateString("en-IN");
 }
 
@@ -28,6 +25,9 @@ function daysUntil(ts?: bigint): number | null {
 
 export function Renewals({ navigate }: Props) {
   const { actor } = useActor();
+  const [renewCustomer, setRenewCustomer] = useState<CustomerRecord | null>(
+    null,
+  );
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -110,19 +110,23 @@ export function Renewals({ navigate }: Props) {
         </div>
       ) : withExpiry.length === 0 ? (
         <Card className="bg-slate-800 border-slate-700">
-          <CardContent className="py-12 text-center text-slate-400">
+          <CardContent
+            className="py-12 text-center text-slate-400"
+            data-ocid="renewals.empty_state"
+          >
             No renewal records found. Set expiry dates on customers to track
             renewals.
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {withExpiry.map((c) => {
+          {withExpiry.map((c, idx) => {
             const days = daysUntil(c.expiryDate);
             return (
               <div
                 key={c.tokenId}
                 className={`flex items-center justify-between p-4 rounded-lg border ${urgencyClass(days)}`}
+                data-ocid={`renewals.item.${idx + 1}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
@@ -133,7 +137,7 @@ export function Renewals({ navigate }: Props) {
                     {urgencyBadge(days)}
                   </div>
                   <div className="text-slate-400 text-xs mt-1">
-                    {c.serviceType} · Expires {formatDate(c.expiryDate)}
+                    {c.serviceType} &middot; Expires {formatDate(c.expiryDate)}
                   </div>
                 </div>
                 <div className="flex gap-2 ml-2">
@@ -150,16 +154,40 @@ export function Renewals({ navigate }: Props) {
                     size="sm"
                     className="text-slate-300 hover:text-white h-8"
                     onClick={() =>
-                      navigate({ name: "customer-detail", tokenId: c.tokenId })
+                      navigate({
+                        name: "customer-detail",
+                        tokenId: c.tokenId,
+                      })
                     }
+                    data-ocid={`renewals.button.${idx + 1}`}
                   >
                     View
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-amber-400 hover:text-amber-300 h-8"
+                    onClick={() => setRenewCustomer(c)}
+                    data-ocid={`renewals.open_modal_button.${idx + 1}`}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                    Renew
                   </Button>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Renewal Modal */}
+      {renewCustomer && (
+        <RenewalModal
+          open={!!renewCustomer}
+          onClose={() => setRenewCustomer(null)}
+          customer={renewCustomer}
+          onSuccess={() => setRenewCustomer(null)}
+        />
       )}
     </div>
   );

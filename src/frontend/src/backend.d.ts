@@ -14,10 +14,15 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
-export interface DocumentLibraryInput {
+export interface RenewalInput {
+    documentBlob?: ExternalBlob;
     serviceName: string;
-    blob: ExternalBlob;
-    description?: string;
+    govtFees: number;
+    serviceCharge: number;
+    nextExpiryDate: bigint;
+    advancePaid: number;
+    customerId: string;
+    renewalDate: bigint;
 }
 export interface ExpenseRecord {
     id: string;
@@ -26,6 +31,11 @@ export interface ExpenseRecord {
     description: string;
     category: string;
     amount: number;
+}
+export interface DocumentLibraryInput {
+    serviceName: string;
+    blob: ExternalBlob;
+    description?: string;
 }
 export interface CustomerInput {
     serviceType: string;
@@ -73,6 +83,20 @@ export interface CustomServiceEntry {
     addedAt: bigint;
     category: string;
 }
+export interface RenewalRecord {
+    id: string;
+    documentBlob?: ExternalBlob;
+    serviceName: string;
+    govtFees: number;
+    serviceCharge: number;
+    createdAt: bigint;
+    totalCharged: number;
+    nextExpiryDate: bigint;
+    advancePaid: number;
+    balanceDue: number;
+    customerId: string;
+    renewalDate: bigint;
+}
 export interface DocumentLibraryItem {
     id: string;
     serviceName: string;
@@ -90,6 +114,9 @@ export interface ProfitSummary {
     today: number;
     thisMonth: number;
     totalNetProfit: number;
+}
+export interface UserProfile {
+    name: string;
 }
 export interface ExpenseSummary {
     today: number;
@@ -110,16 +137,20 @@ export interface backendInterface {
     addCustomService(name: string, category: string): Promise<boolean>;
     addDocumentLibraryItem(input: DocumentLibraryInput): Promise<string>;
     addExpense(input: ExpenseInput): Promise<string>;
+    addRenewalRecord(input: RenewalInput): Promise<string>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     claimFirstAdmin(): Promise<boolean>;
     createCustomer(input: CustomerInput): Promise<string>;
     deleteDocumentLibraryItem(id: string): Promise<boolean>;
     deleteExpense(id: string): Promise<boolean>;
+    getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCustomer(tokenId: string): Promise<CustomerRecord>;
+    getCustomerRenewalHistory(customerId: string): Promise<Array<RenewalRecord>>;
     getExpenseSummary(): Promise<ExpenseSummary>;
     getProfitSummary(): Promise<ProfitSummary>;
     getUpcomingRenewals(daysAhead: bigint): Promise<Array<CustomerRecord>>;
+    getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     listCustomServices(): Promise<Array<CustomServiceEntry>>;
     listCustomers(): Promise<Array<CustomerRecord>>;
@@ -127,6 +158,7 @@ export interface backendInterface {
     listDocumentLibraryItems(): Promise<Array<DocumentLibraryItem>>;
     listExpenses(): Promise<Array<ExpenseRecord>>;
     restoreCustomer(tokenId: string): Promise<boolean>;
+    saveCallerUserProfile(profile: UserProfile): Promise<void>;
     softDeleteCustomer(tokenId: string): Promise<boolean>;
     updateCustomer(tokenId: string, input: CustomerInput): Promise<boolean>;
 }

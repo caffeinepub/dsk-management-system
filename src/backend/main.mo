@@ -7,13 +7,14 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
-import Migration "migration";
+
 import Nat "mo:core/Nat";
 import Text "mo:core/Text";
 import Float "mo:core/Float";
 import Int "mo:core/Int";
 import Order "mo:core/Order";
 import List "mo:core/List";
+import Migration "migration";
 
 (with migration = Migration.run)
 actor {
@@ -21,6 +22,11 @@ actor {
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
+
+  // User Profile Type
+  public type UserProfile = {
+    name : Text;
+  };
 
   // Types
   type Status = { #pending; #in_process; #completed };
@@ -156,14 +162,49 @@ actor {
     sum : Float;
   };
 
+  public type RenewalRecord = {
+    id : Text;
+    customerId : Text;
+    serviceName : Text;
+    renewalDate : Int;
+    nextExpiryDate : Int;
+    govtFees : Float;
+    serviceCharge : Float;
+    totalCharged : Float;
+    advancePaid : Float;
+    balanceDue : Float;
+    documentBlob : ?Storage.ExternalBlob;
+    createdAt : Int;
+  };
+
+  module RenewalRecord {
+    public func compare(renewal1 : RenewalRecord, renewal2 : RenewalRecord) : Order.Order {
+      Int.compare(renewal1.renewalDate, renewal2.renewalDate);
+    };
+  };
+
+  type RenewalInput = {
+    customerId : Text;
+    serviceName : Text;
+    renewalDate : Int;
+    nextExpiryDate : Int;
+    govtFees : Float;
+    serviceCharge : Float;
+    advancePaid : Float;
+    documentBlob : ?Storage.ExternalBlob;
+  };
+
   // State
   var customers = Map.empty<Text, CustomerRecord>();
   var expenses = Map.empty<Text, ExpenseRecord>();
   var documentLibrary = Map.empty<Text, DocumentLibraryItem>();
   var customServices = Map.empty<Text, CustomServiceEntry>();
+  var renewalRecords = Map.empty<Text, RenewalRecord>();
+  var userProfiles = Map.empty<Principal, UserProfile>();
   var customerCount = 0;
   var expenseCount = 0;
   var docCount = 0;
+  var renewalCount = 0;
 
   // Helper: any logged-in (non-anonymous) user is allowed
   func isAuthenticated(caller : Principal) : Bool {
@@ -204,6 +245,28 @@ actor {
     let nanosPerDay = 86_400_000_000_000;
     let nanosPerMonth = nanosPerDay * 30;
     (timestamp / nanosPerMonth) * nanosPerMonth;
+  };
+
+  // User Profile Methods
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
+    };
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
   };
 
   // Always returns true for any authenticated caller
@@ -357,6 +420,17 @@ actor {
         if (customer.createdAt >= startOfMonth) {
           monthProfit += customer.netProfit;
         };
+      };
+    };
+
+    // Add profit from renewal service charges
+    for (renewal in renewalRecords.values()) {
+      totalProfit += renewal.serviceCharge;
+      if (renewal.renewalDate >= startOfToday) {
+        todayProfit += renewal.serviceCharge;
+      };
+      if (renewal.renewalDate >= startOfMonth) {
+        monthProfit += renewal.serviceCharge;
       };
     };
 
@@ -526,5 +600,58 @@ actor {
 
     customServices.add(name, service);
     true;
+  };
+
+  public shared ({ caller }) func addRenewalRecord(input : RenewalInput) : async Text {
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
+    };
+    // Validate customer exists
+    switch (customers.get(input.customerId)) {
+      case (null) { Runtime.trap("Customer not found") };
+      case (?customer) {
+        renewalCount += 1;
+        let renewalId = "RENEW-" # addLeadingZeros(renewalCount, 3);
+        let now = currentTimestamp();
+        let totalCharged = input.govtFees + input.serviceCharge;
+        let balanceDue = totalCharged - input.advancePaid;
+
+        let renewalRecord : RenewalRecord = {
+          id = renewalId;
+          customerId = input.customerId;
+          serviceName = input.serviceName;
+          renewalDate = input.renewalDate;
+          nextExpiryDate = input.nextExpiryDate;
+          govtFees = input.govtFees;
+          serviceCharge = input.serviceCharge;
+          totalCharged;
+          advancePaid = input.advancePaid;
+          balanceDue;
+          documentBlob = input.documentBlob;
+          createdAt = now;
+        };
+
+        renewalRecords.add(renewalId, renewalRecord);
+
+        // Update customer expiry date, current status, and balance due
+        let updatedCustomer = {
+          customer with
+          expiryDate = ?input.nextExpiryDate;
+          currentStatus = #completed : Status;
+          balanceDue;
+          updatedAt = now;
+        };
+        customers.add(input.customerId, updatedCustomer);
+
+        renewalId;
+      };
+    };
+  };
+
+  public query ({ caller }) func getCustomerRenewalHistory(customerId : Text) : async [RenewalRecord] {
+    if (not isAuthenticated(caller)) {
+      Runtime.trap("Please login first");
+    };
+    renewalRecords.values().toArray().filter(func(r) { r.customerId == customerId }).sort();
   };
 };
