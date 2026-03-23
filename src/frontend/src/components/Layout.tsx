@@ -12,10 +12,11 @@ import {
   Users,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import dskLogo from "../../public/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 import type { Page } from "../App";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { Button } from "./ui/button";
+
+const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -44,18 +45,23 @@ export function Layout({
 }: LayoutProps) {
   const { clear } = useInternetIdentity();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const NavContent = () => (
     <>
       <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700">
-        <img
-          src={dskLogo}
-          alt="DSK Logo"
-          className="h-10 w-10 rounded-xl object-contain bg-white p-0.5"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
+        {!logoError ? (
+          <img
+            src={DSK_LOGO}
+            alt="DSK Logo"
+            className="h-10 w-10 rounded-xl object-contain bg-white p-0.5"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-900 font-bold text-sm">
+            DSK
+          </div>
+        )}
         <div>
           <div className="font-bold text-white text-sm">DSK</div>
           <div className="text-xs text-slate-400">Seva Kendra</div>
@@ -138,14 +144,18 @@ export function Layout({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <img
-              src={dskLogo}
-              alt="DSK Logo"
-              className="h-7 w-7 rounded-lg object-contain bg-white p-0.5"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+            {!logoError ? (
+              <img
+                src={DSK_LOGO}
+                alt="DSK Logo"
+                className="h-7 w-7 rounded-lg object-contain bg-white p-0.5"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="h-7 w-7 rounded-lg bg-amber-500 flex items-center justify-center text-slate-900 font-bold text-xs">
+                D
+              </div>
+            )}
             <span className="font-bold text-white text-sm">DSK Management</span>
           </div>
         </div>

@@ -194,17 +194,17 @@ actor {
     documentBlob : ?Storage.ExternalBlob;
   };
 
-  // State
-  var customers = Map.empty<Text, CustomerRecord>();
-  var expenses = Map.empty<Text, ExpenseRecord>();
-  var documentLibrary = Map.empty<Text, DocumentLibraryItem>();
-  var customServices = Map.empty<Text, CustomServiceEntry>();
-  var renewalRecords = Map.empty<Text, RenewalRecord>();
-  var userProfiles = Map.empty<Principal, UserProfile>();
-  var customerCount = 0;
-  var expenseCount = 0;
-  var docCount = 0;
-  var renewalCount = 0;
+  // STABLE State - persists across all upgrades and redeployments
+  stable var customers = Map.empty<Text, CustomerRecord>();
+  stable var expenses = Map.empty<Text, ExpenseRecord>();
+  stable var documentLibrary = Map.empty<Text, DocumentLibraryItem>();
+  stable var customServices = Map.empty<Text, CustomServiceEntry>();
+  stable var renewalRecords = Map.empty<Text, RenewalRecord>();
+  stable var userProfiles = Map.empty<Principal, UserProfile>();
+  stable var customerCount = 0;
+  stable var expenseCount = 0;
+  stable var docCount = 0;
+  stable var renewalCount = 0;
 
   // Helper: any logged-in (non-anonymous) user is allowed
   func isAuthenticated(caller : Principal) : Bool {
