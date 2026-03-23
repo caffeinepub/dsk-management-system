@@ -32,7 +32,7 @@ function daysUntil(ts?: bigint): number | null {
 }
 
 function formatDate(ts?: bigint): string {
-  if (!ts) return "—";
+  if (!ts) return "\u2014";
   return new Date(Number(ts)).toLocaleDateString("en-IN");
 }
 
@@ -86,6 +86,11 @@ export function Dashboard({ navigate }: Props) {
     })
     .sort((a, b) => Number(a.expiryDate ?? 0) - Number(b.expiryDate ?? 0));
 
+  const sevenDayRenewals = urgentRenewals.filter((r) => {
+    const d = daysUntil(r.expiryDate);
+    return d !== null && d <= 7;
+  });
+
   function whatsappLink(c: CustomerRecord): string {
     const phone = c.phone.replace(/\D/g, "");
     const date = formatDate(c.expiryDate);
@@ -111,28 +116,33 @@ export function Dashboard({ navigate }: Props) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Today's Profit"
-          value={profit ? `₹${profit.today.toFixed(0)}` : "—"}
+          value={profit ? `\u20b9${profit.today.toFixed(0)}` : "\u2014"}
           icon={<TrendingUp className="h-5 w-5 text-green-400" />}
           loading={loadingProfit}
           color="border-l-green-500"
         />
         <MetricCard
           title="Monthly Profit"
-          value={profit ? `₹${profit.thisMonth.toFixed(0)}` : "—"}
+          value={profit ? `\u20b9${profit.thisMonth.toFixed(0)}` : "\u2014"}
           icon={<DollarSign className="h-5 w-5 text-amber-400" />}
           loading={loadingProfit}
           color="border-l-amber-500"
         />
         <MetricCard
           title="Pending Cases"
-          value={loadingCustomers ? "—" : String(pendingCount)}
+          value={loadingCustomers ? "\u2014" : String(pendingCount)}
           icon={<Users className="h-5 w-5 text-blue-400" />}
           loading={loadingCustomers}
           color="border-l-blue-500"
         />
         <MetricCard
-          title="Due Renewals"
-          value={loadingRenewals ? "—" : String(urgentRenewals.length)}
+          title="Due in 7 Days"
+          value={loadingRenewals ? "\u2014" : String(sevenDayRenewals.length)}
+          subtext={
+            loadingRenewals
+              ? undefined
+              : `30-day: ${urgentRenewals.length} total`
+          }
           icon={<CalendarClock className="h-5 w-5 text-red-400" />}
           loading={loadingRenewals}
           color="border-l-red-500"
@@ -144,6 +154,12 @@ export function Dashboard({ navigate }: Props) {
           <CardHeader className="pb-3">
             <CardTitle className="text-white flex items-center gap-2 text-base">
               <AlertTriangle className="h-4 w-4 text-red-400" /> Renewal Alerts
+              {sevenDayRenewals.length > 0 && (
+                <span className="ml-auto text-xs font-normal bg-red-900/40 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full">
+                  \u26a0\ufe0f {sevenDayRenewals.length} renewal
+                  {sevenDayRenewals.length !== 1 ? "s" : ""} due within 7 days
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -177,7 +193,7 @@ export function Dashboard({ navigate }: Props) {
                       </span>
                     </div>
                     <div className="text-slate-400 text-xs">
-                      {r.serviceType} · Expires {formatDate(r.expiryDate)}
+                      {r.serviceType} \u00b7 Expires {formatDate(r.expiryDate)}
                     </div>
                   </div>
                   <div className="flex gap-2 ml-2">
@@ -332,12 +348,14 @@ export function Dashboard({ navigate }: Props) {
 function MetricCard({
   title,
   value,
+  subtext,
   icon,
   loading,
   color,
 }: {
   title: string;
   value: string;
+  subtext?: string;
   icon: React.ReactNode;
   loading: boolean;
   color: string;
@@ -352,6 +370,9 @@ function MetricCard({
           <div className="text-2xl font-bold text-white mt-1">{value}</div>
         )}
         <div className="text-slate-400 text-xs mt-0.5">{title}</div>
+        {subtext && !loading && (
+          <div className="text-slate-500 text-xs mt-0.5">{subtext}</div>
+        )}
       </CardContent>
     </Card>
   );

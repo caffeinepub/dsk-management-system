@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Download,
+  Eye,
   FileText,
   MessageCircle,
   Pencil,
@@ -13,7 +14,9 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
-import { type ExternalBlob, Status } from "../backend";
+import { type ExternalBlob, type RenewalRecord, Status } from "../backend";
+import { DocumentViewer } from "../components/DocumentViewer";
+import { PrintInvoiceModal } from "../components/PrintInvoice";
 import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
 import {
@@ -87,7 +90,6 @@ async function shareBlob(blob: ExternalBlob, name: string) {
       url: blob.getDirectURL(),
     });
   }
-  // If neither available, downloadBlob already triggered download
   void bytes;
 }
 
@@ -96,6 +98,11 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
   const qc = useQueryClient();
   const [renewModalOpen, setRenewModalOpen] = useState(false);
   const [docLoading, setDocLoading] = useState<string | null>(null);
+  const [printRenewal, setPrintRenewal] = useState<RenewalRecord | null>(null);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [viewerBlob, setViewerBlob] = useState<ExternalBlob | null>(null);
+  const [viewerName, setViewerName] = useState("");
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ["customer", tokenId],
@@ -135,38 +142,11 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
   const waLink = `https://wa.me/91${phone}?text=${encodeURIComponent(waMsg)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(tokenId)}`;
 
-  const printInvoice = () => {
-    const w = window.open("", "_blank")!;
-    w.document.write(`
-      <html><head><title>DSK Invoice - ${c.tokenId}</title>
-      <style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}
-      h1{color:#333;border-bottom:2px solid #f59e0b;padding-bottom:10px}
-      .header{text-align:center;margin-bottom:20px}
-      .field{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
-      .label{color:#666;font-size:14px}.value{font-weight:bold;font-size:14px}
-      .total{background:#f9f9f9;padding:10px;border-radius:6px;margin-top:10px}
-      @media print{button{display:none}}
-      </style></head><body>
-      <div class="header"><h1>Document Seva Kendra</h1><p style="color:#666">Invoice / Receipt</p></div>
-      <div class="field"><span class="label">Token ID</span><span class="value">${c.tokenId}</span></div>
-      <div class="field"><span class="label">Customer Name</span><span class="value">${c.name}</span></div>
-      <div class="field"><span class="label">Phone</span><span class="value">${c.phone}</span></div>
-      <div class="field"><span class="label">Service</span><span class="value">${c.serviceType}</span></div>
-      <div class="field"><span class="label">Application No</span><span class="value">${c.applicationNo ?? "\u2014"}</span></div>
-      <div class="field"><span class="label">Application Date</span><span class="value">${formatDate(c.applicationDate)}</span></div>
-      <div class="field"><span class="label">Status</span><span class="value">${statusLabel(c.currentStatus)}</span></div>
-      <div class="total">
-        <div class="field"><span class="label">Total Charged</span><span class="value">&#8377;${c.totalCharged.toFixed(2)}</span></div>
-        <div class="field"><span class="label">Govt Fees</span><span class="value">&#8377;${c.govtFees.toFixed(2)}</span></div>
-        <div class="field"><span class="label">Advance Paid</span><span class="value">&#8377;${c.advancePaid.toFixed(2)}</span></div>
-        <div class="field"><span class="label">Balance Due</span><span class="value" style="color:${c.balanceDue > 0 ? "#ef4444" : "#22c55e"}">&#8377;${c.balanceDue.toFixed(2)}</span></div>
-      </div>
-      <p style="text-align:center;color:#999;font-size:12px;margin-top:20px">Thank you for your business! &mdash; DSK</p>
-      <button onclick="window.print()" style="display:block;margin:20px auto;padding:10px 20px;background:#f59e0b;border:none;border-radius:6px;cursor:pointer;font-weight:bold">Print Invoice</button>
-      </body></html>
-    `);
-    w.document.close();
-  };
+  function openViewer(blob: ExternalBlob, name: string) {
+    setViewerBlob(blob);
+    setViewerName(name);
+    setViewerOpen(true);
+  }
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -234,9 +214,13 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           WhatsApp Reminder
         </Button>
         <Button
-          onClick={printInvoice}
+          onClick={() => {
+            setPrintRenewal(null);
+            setPrintModalOpen(true);
+          }}
           variant="outline"
           className="border-slate-600 text-slate-300 hover:bg-slate-700"
+          data-ocid="customer.open_modal_button"
         >
           <Printer className="h-4 w-4 mr-2" />
           Print Invoice
@@ -294,18 +278,21 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           <CardContent className="space-y-2 text-sm">
             <Row
               label="Total Charged"
-              value={`₹${c.totalCharged.toFixed(2)}`}
+              value={`\u20b9${c.totalCharged.toFixed(2)}`}
             />
-            <Row label="Govt Fees" value={`₹${c.govtFees.toFixed(2)}`} />
+            <Row label="Govt Fees" value={`\u20b9${c.govtFees.toFixed(2)}`} />
             <Row
               label="Net Profit"
-              value={`₹${c.netProfit.toFixed(2)}`}
+              value={`\u20b9${c.netProfit.toFixed(2)}`}
               valueClass="text-green-400"
             />
-            <Row label="Advance Paid" value={`₹${c.advancePaid.toFixed(2)}`} />
+            <Row
+              label="Advance Paid"
+              value={`\u20b9${c.advancePaid.toFixed(2)}`}
+            />
             <Row
               label="Balance Due"
-              value={`₹${c.balanceDue.toFixed(2)}`}
+              value={`\u20b9${c.balanceDue.toFixed(2)}`}
               valueClass={c.balanceDue > 0 ? "text-red-400" : "text-green-400"}
             />
           </CardContent>
@@ -367,15 +354,28 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-amber-400 hover:text-amber-300 h-7"
+                      onClick={() => openViewer(blob, `Document_${i + 1}`)}
+                    >
+                      <Eye className="h-3.5 w-3.5 mr-1" />
+                      View
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="text-blue-400 hover:text-blue-300 h-7"
                       disabled={docLoading === docKey}
                       onClick={async () => {
                         setDocLoading(docKey);
                         try {
                           await downloadBlob(blob, `Document_${i + 1}`);
-                          toast.success("ডাউনলোড শুরু হয়েছে");
+                          toast.success(
+                            "\u09A1\u09BE\u0989\u09A8\u09B2\u09CB\u09A1 \u09B6\u09C1\u09B0\u09C1 \u09B9\u09AF\u09BC\u09C7\u099B\u09C7",
+                          );
                         } catch {
-                          toast.error("ডাউনলোড ব্যর্থ হয়েছে");
+                          toast.error(
+                            "\u09A1\u09BE\u0989\u09A8\u09B2\u09CB\u09A1 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5 \u09B9\u09AF\u09BC\u09C7\u099B\u09C7",
+                          );
                         } finally {
                           setDocLoading(null);
                         }
@@ -395,7 +395,9 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                           await shareBlob(blob, `Document_${i + 1}`);
                         } catch (e: unknown) {
                           if (e instanceof Error && e.name !== "AbortError") {
-                            toast.error("শেয়ার ব্যর্থ হয়েছে");
+                            toast.error(
+                              "\u09B6\u09C7\u09AF\u09BC\u09BE\u09B0 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5 \u09B9\u09AF\u09BC\u09C7\u099B\u09C7",
+                            );
                           }
                         } finally {
                           setDocLoading(null);
@@ -447,7 +449,8 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                     <th className="text-left p-3 font-medium">Total</th>
                     <th className="text-left p-3 font-medium">Advance</th>
                     <th className="text-left p-3 font-medium">Balance</th>
-                    <th className="text-left p-3 font-medium">Document</th>
+                    <th className="text-left p-3 font-medium">Doc</th>
+                    <th className="text-left p-3 font-medium">Invoice</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
@@ -472,27 +475,40 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                         </div>
                       </td>
                       <td className="p-3 text-slate-300">
-                        ₹{r.govtFees.toFixed(2)}
+                        \u20b9{r.govtFees.toFixed(2)}
                       </td>
                       <td className="p-3 text-green-400">
-                        ₹{r.serviceCharge.toFixed(2)}
+                        \u20b9{r.serviceCharge.toFixed(2)}
                       </td>
                       <td className="p-3 text-amber-400 font-semibold">
-                        ₹{r.totalCharged.toFixed(2)}
+                        \u20b9{r.totalCharged.toFixed(2)}
                       </td>
                       <td className="p-3 text-slate-300">
-                        ₹{r.advancePaid.toFixed(2)}
+                        \u20b9{r.advancePaid.toFixed(2)}
                       </td>
                       <td
                         className={`p-3 font-semibold ${
                           r.balanceDue > 0 ? "text-red-400" : "text-green-400"
                         }`}
                       >
-                        ₹{r.balanceDue.toFixed(2)}
+                        \u20b9{r.balanceDue.toFixed(2)}
                       </td>
                       <td className="p-3">
                         {r.documentBlob ? (
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-amber-400 hover:text-amber-300 h-6 px-2"
+                              onClick={() =>
+                                openViewer(
+                                  r.documentBlob!,
+                                  `${r.serviceName}_renewal`,
+                                )
+                              }
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -505,16 +521,19 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                                     r.documentBlob!,
                                     `${r.serviceName}_renewal`,
                                   );
-                                  toast.success("ডাউনলোড শুরু হয়েছে");
+                                  toast.success(
+                                    "\u09A1\u09BE\u0989\u09A8\u09B2\u09CB\u09A1 \u09B6\u09C1\u09B0\u09C1 \u09B9\u09AF\u09BC\u09C7\u099B\u09C7",
+                                  );
                                 } catch {
-                                  toast.error("ডাউনলোড ব্যর্থ");
+                                  toast.error(
+                                    "\u09A1\u09BE\u0989\u09A8\u09B2\u09CB\u09A1 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5",
+                                  );
                                 } finally {
                                   setDocLoading(null);
                                 }
                               }}
                             >
-                              <Download className="h-3 w-3 mr-1" />
-                              PDF
+                              <Download className="h-3 w-3" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -533,7 +552,9 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                                     e instanceof Error &&
                                     e.name !== "AbortError"
                                   ) {
-                                    toast.error("শেয়ার ব্যর্থ");
+                                    toast.error(
+                                      "\u09B6\u09C7\u09AF\u09BC\u09BE\u09B0 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5",
+                                    );
                                   }
                                 } finally {
                                   setDocLoading(null);
@@ -546,6 +567,21 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                         ) : (
                           <span className="text-slate-600">\u2014</span>
                         )}
+                      </td>
+                      <td className="p-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-slate-400 hover:text-white h-6 px-2"
+                          onClick={() => {
+                            setPrintRenewal(r);
+                            setPrintModalOpen(true);
+                          }}
+                          title="Print Invoice"
+                          data-ocid={`renewal-history.print.${idx + 1}`}
+                        >
+                          <Printer className="h-3 w-3" />
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -567,6 +603,25 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           }}
         />
       )}
+
+      {/* Print Invoice Modal */}
+      <PrintInvoiceModal
+        open={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        customer={c}
+        renewal={printRenewal}
+      />
+
+      {/* Document Viewer */}
+      <DocumentViewer
+        blob={viewerBlob}
+        name={viewerName}
+        open={viewerOpen}
+        onClose={() => {
+          setViewerOpen(false);
+          setViewerBlob(null);
+        }}
+      />
     </div>
   );
 }

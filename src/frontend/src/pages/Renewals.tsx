@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, MessageCircle, RefreshCw } from "lucide-react";
+import { CalendarClock, MessageCircle, Printer, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { Page } from "../App";
 import type { CustomerRecord } from "../backend";
+import { PrintInvoiceModal } from "../components/PrintInvoice";
 import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -26,6 +27,9 @@ function daysUntil(ts?: bigint): number | null {
 export function Renewals({ navigate }: Props) {
   const { actor } = useActor();
   const [renewCustomer, setRenewCustomer] = useState<CustomerRecord | null>(
+    null,
+  );
+  const [printCustomer, setPrintCustomer] = useState<CustomerRecord | null>(
     null,
   );
 
@@ -140,7 +144,7 @@ export function Renewals({ navigate }: Props) {
                     {c.serviceType} &middot; Expires {formatDate(c.expiryDate)}
                   </div>
                 </div>
-                <div className="flex gap-2 ml-2">
+                <div className="flex gap-1 ml-2 flex-wrap">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -173,6 +177,16 @@ export function Renewals({ navigate }: Props) {
                     <RefreshCw className="h-3.5 w-3.5 mr-1" />
                     Renew
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-slate-400 hover:text-white h-8"
+                    onClick={() => setPrintCustomer(c)}
+                    title="Print Invoice"
+                    data-ocid={`renewals.print.${idx + 1}`}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             );
@@ -180,13 +194,21 @@ export function Renewals({ navigate }: Props) {
         </div>
       )}
 
-      {/* Renewal Modal */}
       {renewCustomer && (
         <RenewalModal
           open={!!renewCustomer}
           onClose={() => setRenewCustomer(null)}
           customer={renewCustomer}
           onSuccess={() => setRenewCustomer(null)}
+        />
+      )}
+
+      {printCustomer && (
+        <PrintInvoiceModal
+          open={!!printCustomer}
+          onClose={() => setPrintCustomer(null)}
+          customer={printCustomer}
+          renewal={null}
         />
       )}
     </div>
