@@ -14,9 +14,9 @@ import Float "mo:core/Float";
 import Int "mo:core/Int";
 import Order "mo:core/Order";
 import List "mo:core/List";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   include MixinStorage();
 

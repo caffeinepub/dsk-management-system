@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ExternalLink,
+  Download,
   FileText,
   MessageCircle,
   Pencil,
   Printer,
   RefreshCw,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
-import { Status } from "../backend";
+import { type ExternalBlob, Status } from "../backend";
 import { RenewalModal } from "../components/RenewalModal";
 import { Button } from "../components/ui/button";
 import {
@@ -43,13 +44,58 @@ function statusLabel(status: Status): string {
 }
 function formatDate(ts?: bigint): string {
   if (!ts) return "\u2014";
-  return new Date(Number(ts)).toLocaleDateString("en-IN");
+  return new Date(Number(ts / 1_000_000n)).toLocaleDateString("en-IN");
+}
+
+async function downloadBlob(blob: ExternalBlob, name: string) {
+  const bytes = await blob.getBytes();
+  let mimeType = "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) mimeType = "image/png";
+  else if (bytes[0] === 0x25 && bytes[1] === 0x50) mimeType = "application/pdf";
+  else if (bytes[0] === 0xff && bytes[1] === 0xd8) mimeType = "image/jpeg";
+  const ext =
+    mimeType === "application/pdf"
+      ? "pdf"
+      : mimeType === "image/png"
+        ? "png"
+        : "jpg";
+  const blobObj = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blobObj);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}.${ext}`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return { bytes, mimeType, blobObj };
+}
+
+async function shareBlob(blob: ExternalBlob, name: string) {
+  const { bytes, mimeType, blobObj } = await downloadBlob(blob, name);
+  const ext =
+    mimeType === "application/pdf"
+      ? "pdf"
+      : mimeType === "image/png"
+        ? "png"
+        : "jpg";
+  const fileObj = new File([blobObj], `${name}.${ext}`, { type: mimeType });
+  if (navigator.canShare?.({ files: [fileObj] })) {
+    await navigator.share({ title: name, files: [fileObj] });
+  } else if (navigator.share) {
+    await navigator.share({
+      title: name,
+      text: name,
+      url: blob.getDirectURL(),
+    });
+  }
+  // If neither available, downloadBlob already triggered download
+  void bytes;
 }
 
 export function CustomerDetail({ navigate, tokenId }: Props) {
   const { actor } = useActor();
   const qc = useQueryClient();
   const [renewModalOpen, setRenewModalOpen] = useState(false);
+  const [docLoading, setDocLoading] = useState<string | null>(null);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ["customer", tokenId],
@@ -248,21 +294,18 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
           <CardContent className="space-y-2 text-sm">
             <Row
               label="Total Charged"
-              value={`\u20b9${c.totalCharged.toFixed(2)}`}
+              value={`₹${c.totalCharged.toFixed(2)}`}
             />
-            <Row label="Govt Fees" value={`\u20b9${c.govtFees.toFixed(2)}`} />
+            <Row label="Govt Fees" value={`₹${c.govtFees.toFixed(2)}`} />
             <Row
               label="Net Profit"
-              value={`\u20b9${c.netProfit.toFixed(2)}`}
+              value={`₹${c.netProfit.toFixed(2)}`}
               valueClass="text-green-400"
             />
-            <Row
-              label="Advance Paid"
-              value={`\u20b9${c.advancePaid.toFixed(2)}`}
-            />
+            <Row label="Advance Paid" value={`₹${c.advancePaid.toFixed(2)}`} />
             <Row
               label="Balance Due"
-              value={`\u20b9${c.balanceDue.toFixed(2)}`}
+              value={`₹${c.balanceDue.toFixed(2)}`}
               valueClass={c.balanceDue > 0 ? "text-red-400" : "text-green-400"}
             />
           </CardContent>
@@ -310,23 +353,62 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {c.documentBlobIds.map((blob, i) => (
-              <div
-                key={blob.getDirectURL() || String(i)}
-                className="flex items-center justify-between p-2 bg-slate-700 rounded"
-              >
-                <span className="text-slate-300 text-sm">Document {i + 1}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-blue-400 hover:text-blue-300 h-7"
-                  onClick={() => window.open(blob.getDirectURL(), "_blank")}
+            {c.documentBlobIds.map((blob, i) => {
+              const docKey = `doc-${i}`;
+              return (
+                <div
+                  key={docKey}
+                  className="flex items-center justify-between p-2 bg-slate-700 rounded"
                 >
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                  View
-                </Button>
-              </div>
-            ))}
+                  <span className="text-slate-300 text-sm">
+                    Document {i + 1}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-blue-400 hover:text-blue-300 h-7"
+                      disabled={docLoading === docKey}
+                      onClick={async () => {
+                        setDocLoading(docKey);
+                        try {
+                          await downloadBlob(blob, `Document_${i + 1}`);
+                          toast.success("ডাউনলোড শুরু হয়েছে");
+                        } catch {
+                          toast.error("ডাউনলোড ব্যর্থ হয়েছে");
+                        } finally {
+                          setDocLoading(null);
+                        }
+                      }}
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                      Download
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-green-400 hover:text-green-300 h-7"
+                      disabled={docLoading === `share-${docKey}`}
+                      onClick={async () => {
+                        setDocLoading(`share-${docKey}`);
+                        try {
+                          await shareBlob(blob, `Document_${i + 1}`);
+                        } catch (e: unknown) {
+                          if (e instanceof Error && e.name !== "AbortError") {
+                            toast.error("শেয়ার ব্যর্থ হয়েছে");
+                          }
+                        } finally {
+                          setDocLoading(null);
+                        }
+                      }}
+                    >
+                      <Share2 className="h-3.5 w-3.5 mr-1" />
+                      Share
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -376,54 +458,91 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                       data-ocid={`renewal-history.item.${idx + 1}`}
                     >
                       <td className="p-3 text-slate-300">
-                        {new Date(Number(r.renewalDate)).toLocaleDateString(
-                          "en-IN",
-                        )}
+                        {new Date(
+                          Number(r.renewalDate / 1_000_000n),
+                        ).toLocaleDateString("en-IN")}
                       </td>
                       <td className="p-3">
                         <div className="text-white">{r.serviceName}</div>
                         <div className="text-slate-500">
                           Next:{" "}
                           {new Date(
-                            Number(r.nextExpiryDate),
+                            Number(r.nextExpiryDate / 1_000_000n),
                           ).toLocaleDateString("en-IN")}
                         </div>
                       </td>
                       <td className="p-3 text-slate-300">
-                        \u20b9{r.govtFees.toFixed(2)}
+                        ₹{r.govtFees.toFixed(2)}
                       </td>
                       <td className="p-3 text-green-400">
-                        \u20b9{r.serviceCharge.toFixed(2)}
+                        ₹{r.serviceCharge.toFixed(2)}
                       </td>
                       <td className="p-3 text-amber-400 font-semibold">
-                        \u20b9{r.totalCharged.toFixed(2)}
+                        ₹{r.totalCharged.toFixed(2)}
                       </td>
                       <td className="p-3 text-slate-300">
-                        \u20b9{r.advancePaid.toFixed(2)}
+                        ₹{r.advancePaid.toFixed(2)}
                       </td>
                       <td
                         className={`p-3 font-semibold ${
                           r.balanceDue > 0 ? "text-red-400" : "text-green-400"
                         }`}
                       >
-                        \u20b9{r.balanceDue.toFixed(2)}
+                        ₹{r.balanceDue.toFixed(2)}
                       </td>
                       <td className="p-3">
                         {r.documentBlob ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-400 hover:text-blue-300 h-6 px-2"
-                            onClick={() =>
-                              window.open(
-                                r.documentBlob!.getDirectURL(),
-                                "_blank",
-                              )
-                            }
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            View
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-400 hover:text-blue-300 h-6 px-2"
+                              disabled={docLoading === `renewal-dl-${r.id}`}
+                              onClick={async () => {
+                                setDocLoading(`renewal-dl-${r.id}`);
+                                try {
+                                  await downloadBlob(
+                                    r.documentBlob!,
+                                    `${r.serviceName}_renewal`,
+                                  );
+                                  toast.success("ডাউনলোড শুরু হয়েছে");
+                                } catch {
+                                  toast.error("ডাউনলোড ব্যর্থ");
+                                } finally {
+                                  setDocLoading(null);
+                                }
+                              }}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              PDF
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-green-400 hover:text-green-300 h-6 px-2"
+                              disabled={docLoading === `renewal-sh-${r.id}`}
+                              onClick={async () => {
+                                setDocLoading(`renewal-sh-${r.id}`);
+                                try {
+                                  await shareBlob(
+                                    r.documentBlob!,
+                                    `${r.serviceName}_renewal`,
+                                  );
+                                } catch (e: unknown) {
+                                  if (
+                                    e instanceof Error &&
+                                    e.name !== "AbortError"
+                                  ) {
+                                    toast.error("শেয়ার ব্যর্থ");
+                                  }
+                                } finally {
+                                  setDocLoading(null);
+                                }
+                              }}
+                            >
+                              <Share2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         ) : (
                           <span className="text-slate-600">\u2014</span>
                         )}

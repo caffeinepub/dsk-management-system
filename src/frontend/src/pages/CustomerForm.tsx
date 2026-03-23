@@ -78,11 +78,11 @@ const SERVICE_CATEGORIES: Record<string, string[]> = {
 
 function tsToDate(ts?: bigint): string {
   if (!ts) return "";
-  return new Date(Number(ts)).toISOString().split("T")[0];
+  return new Date(Number(ts / 1_000_000n)).toISOString().split("T")[0];
 }
 function dateToTs(s: string): bigint | undefined {
   if (!s) return undefined;
-  return BigInt(new Date(s).getTime());
+  return BigInt(new Date(s).getTime()) * 1_000_000n;
 }
 
 const lbl = "block text-sm font-medium text-slate-300 mb-1";
@@ -182,7 +182,8 @@ export function CustomerForm({ navigate, tokenId }: Props) {
         serviceType: finalServiceType,
         customServiceName: isCustom ? customServiceName : undefined,
         applicationNo: applicationNo || undefined,
-        applicationDate: BigInt(new Date(applicationDate).getTime()),
+        applicationDate:
+          BigInt(new Date(applicationDate).getTime()) * 1_000_000n,
         currentStatus: status,
         deliveryDate: dateToTs(deliveryDate),
         expiryDate: dateToTs(expiryDate),

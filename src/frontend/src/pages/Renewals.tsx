@@ -15,12 +15,12 @@ interface Props {
 
 function formatDate(ts?: bigint): string {
   if (!ts) return "\u2014";
-  return new Date(Number(ts)).toLocaleDateString("en-IN");
+  return new Date(Number(ts / 1_000_000n)).toLocaleDateString("en-IN");
 }
 
 function daysUntil(ts?: bigint): number | null {
   if (!ts) return null;
-  return Math.ceil((Number(ts) - Date.now()) / 86400000);
+  return Math.ceil((Number(ts / 1_000_000n) - Date.now()) / 86400000);
 }
 
 export function Renewals({ navigate }: Props) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import dskLogo from "../../public/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const [fadeOut, setFadeOut] = useState(false);
@@ -19,7 +20,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       }`}
     >
       <img
-        src="/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png"
+        src={dskLogo}
         alt="DSK Logo"
         className="w-40 h-40 object-contain rounded-2xl shadow-2xl"
       />

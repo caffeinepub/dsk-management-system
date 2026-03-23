@@ -12,11 +12,10 @@ import {
   Users,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import dskLogo from "../../public/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 import type { Page } from "../App";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { Button } from "./ui/button";
-
-const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -50,7 +49,7 @@ export function Layout({
     <>
       <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-700">
         <img
-          src={DSK_LOGO}
+          src={dskLogo}
           alt="DSK Logo"
           className="h-10 w-10 rounded-xl object-contain bg-white p-0.5"
           onError={(e) => {
@@ -140,7 +139,7 @@ export function Layout({
           </Button>
           <div className="flex items-center gap-2">
             <img
-              src={DSK_LOGO}
+              src={dskLogo}
               alt="DSK Logo"
               className="h-7 w-7 rounded-lg object-contain bg-white p-0.5"
               onError={(e) => {
