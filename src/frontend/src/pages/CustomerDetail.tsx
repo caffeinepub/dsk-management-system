@@ -475,23 +475,28 @@ export function CustomerDetail({ navigate, tokenId }: Props) {
                         </div>
                       </td>
                       <td className="p-3 text-slate-300">
-                        \u20b9{r.govtFees.toFixed(2)}
+                        {"₹"}
+                        {r.govtFees.toFixed(2)}
                       </td>
                       <td className="p-3 text-green-400">
-                        \u20b9{r.serviceCharge.toFixed(2)}
+                        {"₹"}
+                        {r.serviceCharge.toFixed(2)}
                       </td>
                       <td className="p-3 text-amber-400 font-semibold">
-                        \u20b9{r.totalCharged.toFixed(2)}
+                        {"₹"}
+                        {r.totalCharged.toFixed(2)}
                       </td>
                       <td className="p-3 text-slate-300">
-                        \u20b9{r.advancePaid.toFixed(2)}
+                        {"₹"}
+                        {r.advancePaid.toFixed(2)}
                       </td>
                       <td
                         className={`p-3 font-semibold ${
                           r.balanceDue > 0 ? "text-red-400" : "text-green-400"
                         }`}
                       >
-                        \u20b9{r.balanceDue.toFixed(2)}
+                        {"₹"}
+                        {r.balanceDue.toFixed(2)}
                       </td>
                       <td className="p-3">
                         {r.documentBlob ? (

@@ -12,7 +12,6 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
-import { Skeleton } from "../components/ui/skeleton";
 import { useActor } from "../hooks/useActor";
 
 interface Props {
@@ -90,7 +89,7 @@ const fieldCls =
   "bg-slate-700 border-slate-600 text-white placeholder:text-slate-500";
 
 export function CustomerForm({ navigate, tokenId }: Props) {
-  const { actor } = useActor();
+  const { actor, isFetching } = useActor();
   const qc = useQueryClient();
   const isEdit = !!tokenId;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,7 +161,10 @@ export function CustomerForm({ navigate, tokenId }: Props) {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor)
+        throw new Error(
+          "Server not ready. Please wait a moment and try again.",
+        );
       setUploading(true);
       const docBlobs: ExternalBlob[] = await Promise.all(
         uploadedFiles.map(async (f) => {
@@ -235,6 +237,10 @@ export function CustomerForm({ navigate, tokenId }: Props) {
     );
   }
 
+  const isConnecting = isFetching && !actor;
+  const isSubmitDisabled =
+    saveMut.isPending || uploading || !actor || isFetching;
+
   return (
     <div className="space-y-5 max-w-2xl">
       <div className="flex items-center gap-3">
@@ -249,6 +255,12 @@ export function CustomerForm({ navigate, tokenId }: Props) {
         <h1 className="text-2xl font-bold text-white">
           {isEdit ? "Edit Customer" : "New Customer"}
         </h1>
+        {isConnecting && (
+          <div className="flex items-center gap-2 text-amber-400 text-sm ml-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Connecting to server...</span>
+          </div>
+        )}
       </div>
 
       <form
@@ -275,6 +287,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                   required
                   className={fieldCls}
                   placeholder="Customer name"
+                  data-ocid="customer.input"
                 />
               </div>
               <div>
@@ -285,6 +298,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                   required
                   className={fieldCls}
                   placeholder="Phone number"
+                  data-ocid="customer.input"
                 />
               </div>
             </div>
@@ -295,6 +309,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                 onChange={(e) => setApplicationNo(e.target.value)}
                 className={fieldCls}
                 placeholder="Optional"
+                data-ocid="customer.input"
               />
             </div>
           </CardContent>
@@ -318,6 +333,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                   setIsCustom(false);
                 }}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                data-ocid="customer.select"
               >
                 {Object.keys(SERVICE_CATEGORIES).map((cat) => (
                   <option key={cat}>{cat}</option>
@@ -335,6 +351,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                 }}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
                 required
+                data-ocid="customer.select"
               >
                 <option value="">Select service...</option>
                 {allServicesForCategory.map((s) => (
@@ -354,6 +371,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                   required
                   className={fieldCls}
                   placeholder="Enter service name"
+                  data-ocid="customer.input"
                 />
               </div>
             )}
@@ -374,6 +392,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Status)}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                data-ocid="customer.select"
               >
                 <option value={Status.pending}>Pending</option>
                 <option value={Status.in_process}>In-Process</option>
@@ -490,6 +509,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                 rows={3}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white placeholder:text-slate-500 text-sm resize-none"
                 placeholder="Any additional notes..."
+                data-ocid="customer.textarea"
               />
             </div>
             <div>
@@ -498,6 +518,7 @@ export function CustomerForm({ navigate, tokenId }: Props) {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-2 px-3 py-2 bg-slate-700 border border-dashed border-slate-500 rounded-md text-slate-400 hover:border-amber-500 hover:text-amber-400 cursor-pointer text-sm transition-colors w-full"
+                data-ocid="customer.upload_button"
               >
                 <Upload className="h-4 w-4" />
                 <span>
@@ -535,18 +556,25 @@ export function CustomerForm({ navigate, tokenId }: Props) {
             variant="outline"
             onClick={() => navigate({ name: "customers" })}
             className="border-slate-600 text-slate-300 hover:bg-slate-700"
+            data-ocid="customer.cancel_button"
           >
             Cancel
           </Button>
           <Button
             type="submit"
-            disabled={saveMut.isPending || uploading}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold flex-1"
+            disabled={isSubmitDisabled}
+            className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold flex-1 disabled:opacity-60"
+            data-ocid="customer.submit_button"
           >
             {saveMut.isPending || uploading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 Saving...
+              </>
+            ) : isFetching && !actor ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Connecting...
               </>
             ) : isEdit ? (
               "Update Customer"

@@ -15,6 +15,8 @@ import { QRScanner } from "./pages/QRScanner";
 import { Renewals } from "./pages/Renewals";
 import { Settings } from "./pages/Settings";
 
+const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
+
 export type Page =
   | { name: "dashboard" }
   | { name: "customers" }
@@ -36,6 +38,7 @@ export default function App() {
     return localStorage.getItem("dsk-dark") !== "false";
   });
   const [showSplash, setShowSplash] = useState(true);
+  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("dsk-dark", darkMode ? "true" : "false");
@@ -58,11 +61,18 @@ export default function App() {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="text-center space-y-6 max-w-sm w-full">
           <div className="flex justify-center">
-            <img
-              src="/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png"
-              alt="DSK Logo"
-              className="w-20 h-20 object-contain rounded-2xl"
-            />
+            {!logoError ? (
+              <img
+                src={DSK_LOGO}
+                alt="DSK Logo"
+                className="w-20 h-20 object-contain rounded-2xl"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-2xl bg-amber-500 flex items-center justify-center">
+                <Building2 className="h-10 w-10 text-slate-900" />
+              </div>
+            )}
           </div>
           <div>
             <h1 className="text-3xl font-bold text-white">DSK</h1>
@@ -73,6 +83,7 @@ export default function App() {
             onClick={login}
             disabled={isLoggingIn}
             className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold py-3"
+            data-ocid="login.primary_button"
           >
             {isLoggingIn ? (
               <>

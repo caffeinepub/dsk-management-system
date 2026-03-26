@@ -1,4 +1,6 @@
+import html2canvas from "html2canvas";
 import { X } from "lucide-react";
+import { useRef, useState } from "react";
 import type { CustomerRecord, RenewalRecord } from "../backend";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -14,7 +16,6 @@ interface PrintInvoiceProps {
 function formatDate(ts?: bigint): string {
   if (!ts) return "\u2014";
   const ms = Number(ts);
-  // Handle nanoseconds
   const date = ms > 1e15 ? new Date(ms / 1_000_000) : new Date(ms);
   return date.toLocaleDateString("en-IN");
 }
@@ -23,11 +24,66 @@ function formatDateMs(ms: number): string {
   return new Date(ms).toLocaleDateString("en-IN");
 }
 
+function printInNewWindow(invoiceEl: HTMLElement) {
+  const win = window.open("", "_blank", "width=400,height=700");
+  if (!win) return;
+  win.document.write(`
+    <html><head>
+    <style>
+      body { font-family: 'Courier New', Courier, monospace; font-size: 12px; max-width: 320px; margin: 0 auto; background: #fff; color: #111; padding: 12px 10px; }
+      @page { margin: 5mm; size: 80mm auto; }
+      img { max-width: 100%; }
+    </style>
+    </head><body>
+    ${invoiceEl.innerHTML}
+    </body></html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => {
+    win.print();
+    win.close();
+  }, 500);
+}
+
+async function shareAsImage(invoiceEl: HTMLElement, invoiceNo: string) {
+  const canvas = await html2canvas(invoiceEl, {
+    backgroundColor: "#ffffff",
+    scale: 2,
+    useCORS: true,
+  });
+  return new Promise<void>((resolve) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        resolve();
+        return;
+      }
+      const file = new File([blob], `Invoice_${invoiceNo}.png`, {
+        type: "image/png",
+      });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: `Invoice ${invoiceNo}`, files: [file] });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Invoice_${invoiceNo}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+      resolve();
+    }, "image/png");
+  });
+}
+
 export function PrintInvoice({
   customer: c,
   renewal,
   onClose,
 }: PrintInvoiceProps) {
+  const invoiceRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+
   const today = new Date().toLocaleDateString("en-IN");
   const invoiceNo = `DSK-INV-${c.tokenId}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(c.tokenId)}`;
@@ -43,29 +99,37 @@ export function PrintInvoice({
     : formatDate(c.expiryDate);
   const renewalDate = renewal ? formatDate(renewal.renewalDate) : today;
 
+  const rupee = "\u20b9";
+
+  async function handleShare() {
+    if (!invoiceRef.current) return;
+    setSharing(true);
+    try {
+      await shareAsImage(invoiceRef.current, invoiceNo);
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name !== "AbortError") {
+        console.error("Share failed", e);
+      }
+    } finally {
+      setSharing(false);
+    }
+  }
+
   return (
     <div>
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          body > * { display: none !important; }
-          #dsk-print-invoice { display: block !important; }
-          .print-hide { display: none !important; }
-          @page { margin: 5mm; size: 80mm auto; }
-        }
-        #dsk-print-invoice {
-          font-family: 'Courier New', Courier, monospace;
-          font-size: 12px;
-          max-width: 320px;
-          margin: 0 auto;
-          background: #fff;
-          color: #111;
-          padding: 12px 10px;
-        }
-      `}</style>
-
-      <div id="dsk-print-invoice">
-        {/* Logo & Header */}
+      {/* Invoice content - this div is captured for image sharing */}
+      <div
+        ref={invoiceRef}
+        style={{
+          fontFamily: "'Courier New', Courier, monospace",
+          fontSize: 12,
+          maxWidth: 320,
+          margin: "0 auto",
+          background: "#fff",
+          color: "#111",
+          padding: "12px 10px",
+        }}
+      >
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <img
             src={DSK_LOGO}
@@ -94,7 +158,6 @@ export function PrintInvoice({
           <div style={{ margin: "4px 0", borderTop: "1px dashed #999" }} />
         </div>
 
-        {/* Invoice Meta */}
         <div style={{ fontSize: 11, marginBottom: 6 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>Invoice No:</span>
@@ -108,7 +171,6 @@ export function PrintInvoice({
 
         <div style={{ borderTop: "1px dashed #999", margin: "6px 0" }} />
 
-        {/* Customer Details */}
         <div style={{ fontSize: 11, marginBottom: 6 }}>
           <div style={{ fontWeight: "bold", marginBottom: 3, fontSize: 12 }}>
             CUSTOMER DETAILS
@@ -122,15 +184,14 @@ export function PrintInvoice({
 
         <div style={{ borderTop: "1px dashed #999", margin: "6px 0" }} />
 
-        {/* Financials */}
         <div style={{ fontSize: 11, marginBottom: 6 }}>
           <div style={{ fontWeight: "bold", marginBottom: 3, fontSize: 12 }}>
             PAYMENT DETAILS
           </div>
-          <InvRow label="Govt Fees" value={`\u20b9${govtFees.toFixed(2)}`} />
+          <InvRow label="Govt Fees" value={`${rupee}${govtFees.toFixed(2)}`} />
           <InvRow
             label="Service Charge"
-            value={`\u20b9${serviceCharge.toFixed(2)}`}
+            value={`${rupee}${serviceCharge.toFixed(2)}`}
           />
           <div style={{ borderTop: "1px solid #333", margin: "3px 0" }} />
           <div
@@ -141,10 +202,13 @@ export function PrintInvoice({
             }}
           >
             <span>TOTAL</span>
-            <span>\u20b9{total.toFixed(2)}</span>
+            <span>{`${rupee}${total.toFixed(2)}`}</span>
           </div>
           <div style={{ borderTop: "1px solid #333", margin: "3px 0" }} />
-          <InvRow label="Advance Paid" value={`\u20b9${advance.toFixed(2)}`} />
+          <InvRow
+            label="Advance Paid"
+            value={`${rupee}${advance.toFixed(2)}`}
+          />
           <div
             style={{
               display: "flex",
@@ -154,14 +218,13 @@ export function PrintInvoice({
           >
             <span>Balance Due</span>
             <span style={{ fontWeight: "bold" }}>
-              \u20b9{balance.toFixed(2)}
+              {`${rupee}${balance.toFixed(2)}`}
             </span>
           </div>
         </div>
 
         <div style={{ borderTop: "1px dashed #999", margin: "6px 0" }} />
 
-        {/* Dates */}
         <div style={{ fontSize: 11, marginBottom: 6 }}>
           <InvRow label="Renewal Date" value={renewalDate} />
           <InvRow label="Next Expiry" value={nextExpiry} />
@@ -169,7 +232,6 @@ export function PrintInvoice({
 
         <div style={{ borderTop: "1px dashed #999", margin: "6px 0" }} />
 
-        {/* QR Code */}
         <div style={{ textAlign: "center", margin: "8px 0" }}>
           <img
             src={qrUrl}
@@ -180,6 +242,7 @@ export function PrintInvoice({
               margin: "0 auto",
               display: "block",
             }}
+            crossOrigin="anonymous"
           />
           <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>
             Scan to verify: {c.tokenId}
@@ -188,7 +251,6 @@ export function PrintInvoice({
 
         <div style={{ borderTop: "1px dashed #999", margin: "6px 0" }} />
 
-        {/* Footer */}
         <div style={{ textAlign: "center", fontSize: 10, color: "#555" }}>
           <div style={{ fontWeight: "bold", color: "#111", marginBottom: 2 }}>
             Thank you for choosing DSK
@@ -204,51 +266,75 @@ export function PrintInvoice({
             {formatDateMs(Date.now())}
           </div>
         </div>
+      </div>
 
-        {/* Print button — hidden in actual print */}
-        <div
-          className="print-hide"
+      {/* Action buttons - outside captured area */}
+      <div
+        style={{
+          textAlign: "center",
+          marginTop: 16,
+          display: "flex",
+          gap: 8,
+          justifyContent: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            invoiceRef.current && printInNewWindow(invoiceRef.current)
+          }
           style={{
-            textAlign: "center",
-            marginTop: 16,
-            display: "flex",
-            gap: 8,
-            justifyContent: "center",
+            background: "#f59e0b",
+            border: "none",
+            borderRadius: 6,
+            padding: "8px 20px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            fontSize: 13,
           }}
+          data-ocid="invoice.primary_button"
         >
+          🖨 Print Invoice
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={sharing}
+          style={{
+            background: sharing ? "#6b7280" : "#2563eb",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "8px 16px",
+            cursor: sharing ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: "bold",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+          data-ocid="invoice.secondary_button"
+        >
+          {sharing ? "⏳ Capturing..." : "📤 Share as Image"}
+        </button>
+        {onClose && (
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={onClose}
             style={{
-              background: "#f59e0b",
+              background: "#374151",
+              color: "#fff",
               border: "none",
               borderRadius: 6,
-              padding: "8px 20px",
-              fontWeight: "bold",
+              padding: "8px 16px",
               cursor: "pointer",
               fontSize: 13,
             }}
           >
-            \uD83D\uDDA8 Print Invoice
+            Close
           </button>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: "#374151",
-                color: "#fff",
-                border: "none",
-                borderRadius: 6,
-                padding: "8px 16px",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
-            >
-              Close
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

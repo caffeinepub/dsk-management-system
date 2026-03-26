@@ -25,7 +25,7 @@ function toNano(dateStr: string): bigint {
 }
 
 export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
-  const { actor } = useActor();
+  const { actor, isFetching } = useActor();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -62,7 +62,10 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Not connected");
+      if (!actor)
+        throw new Error(
+          "Server not ready. Please wait a moment and try again.",
+        );
       if (!nextExpiryDate) throw new Error("Next Expiry Date is required");
       return actor.addRenewalRecord({
         customerId: customer.tokenId,
@@ -99,6 +102,8 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const isConnecting = isFetching && !actor;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -112,6 +117,9 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
             <span className="text-amber-400 font-mono text-sm ml-1">
               {customer.tokenId}
             </span>
+            {isConnecting && (
+              <Loader2 className="h-4 w-4 animate-spin text-amber-300 ml-1" />
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -213,7 +221,7 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
             </div>
           </div>
 
-          {/* Document Upload - using label for semantic file input */}
+          {/* Document Upload */}
           <div className="space-y-1">
             <span className="text-slate-300 text-xs block">
               Upload Document (PDF / JPG / PNG)
@@ -272,7 +280,9 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
             </Button>
             <Button
               onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || !nextExpiryDate}
+              disabled={
+                saveMut.isPending || !nextExpiryDate || !actor || isFetching
+              }
               className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold disabled:opacity-50"
               data-ocid="renewal.submit_button"
             >
@@ -281,7 +291,11 @@ export function RenewalModal({ open, onClose, customer, onSuccess }: Props) {
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {saveMut.isPending ? "Saving..." : "Save Renewal"}
+              {saveMut.isPending
+                ? "Saving..."
+                : isConnecting
+                  ? "Connecting..."
+                  : "Save Renewal"}
             </Button>
           </div>
         </div>
