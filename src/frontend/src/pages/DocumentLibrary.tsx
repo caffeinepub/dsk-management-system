@@ -35,6 +35,29 @@ interface PreviewState {
   bytes: Uint8Array;
 }
 
+const CATEGORIES = [
+  "General",
+  "Business Registration",
+  "Tax & Legal",
+  "Land & Property",
+  "Govt IDs & Certificates",
+  "Vehicle & Insurance",
+  "Safety & General",
+  "Other",
+];
+
+function parseDocDescription(desc?: string): {
+  category: string;
+  note: string;
+} {
+  if (!desc) return { category: "General", note: "" };
+  if (desc.startsWith("cat:")) {
+    const [catPart, ...rest] = desc.split("|");
+    return { category: catPart.replace("cat:", ""), note: rest.join("|") };
+  }
+  return { category: "General", note: desc };
+}
+
 export function DocumentLibrary({ navigate: _ }: Props) {
   const { actor } = useActor();
   const qc = useQueryClient();
@@ -48,10 +71,13 @@ export function DocumentLibrary({ navigate: _ }: Props) {
     queryKey: ["doc-library"],
     queryFn: () => actor!.listDocumentLibraryItems(),
     enabled: !!actor,
+    staleTime: 2 * 60 * 1000,
   });
 
   const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("General");
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -61,9 +87,16 @@ export function DocumentLibrary({ navigate: _ }: Props) {
       setUploading(true);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const blob = ExternalBlob.fromBytes(bytes);
+      const finalCategory =
+        category === "General" && customCategoryInput
+          ? customCategoryInput
+          : category;
+      const descValue = description
+        ? `cat:${finalCategory}|${description}`
+        : `cat:${finalCategory}`;
       await actor.addDocumentLibraryItem({
         serviceName,
-        description: description || undefined,
+        description: descValue || undefined,
         blob,
       });
       setUploading(false);
@@ -73,6 +106,8 @@ export function DocumentLibrary({ navigate: _ }: Props) {
       toast.success("Document uploaded");
       setServiceName("");
       setDescription("");
+      setCategory("General");
+      setCustomCategoryInput("");
       setFile(null);
     },
     onError: (e) => {
@@ -93,13 +128,16 @@ export function DocumentLibrary({ navigate: _ }: Props) {
     blob: ExternalBlob,
   ): Promise<{ bytes: Uint8Array; mimeType: string; objectUrl: string }> {
     const bytes = await blob.getBytes();
-    // Detect mime type from magic bytes
-    let mimeType = "image/jpeg";
+    let mimeType = "application/octet-stream";
     if (bytes[0] === 0x89 && bytes[1] === 0x50) mimeType = "image/png";
     else if (bytes[0] === 0x47 && bytes[1] === 0x49) mimeType = "image/gif";
     else if (bytes[0] === 0x25 && bytes[1] === 0x50)
       mimeType = "application/pdf";
     else if (bytes[0] === 0xff && bytes[1] === 0xd8) mimeType = "image/jpeg";
+    else if (bytes[0] === 0x50 && bytes[1] === 0x4b)
+      mimeType = "application/zip"; // xlsx, docx
+    else if (bytes[0] === 0xd0 && bytes[1] === 0xcf)
+      mimeType = "application/msword"; // xls, doc
     const blobObj = new Blob([bytes], { type: mimeType });
     const objectUrl = URL.createObjectURL(blobObj);
     return { bytes, mimeType, objectUrl };
@@ -134,7 +172,13 @@ export function DocumentLibrary({ navigate: _ }: Props) {
           ? "pdf"
           : mimeType === "image/png"
             ? "png"
-            : "jpg";
+            : mimeType === "image/gif"
+              ? "gif"
+              : mimeType === "application/zip"
+                ? "zip"
+                : mimeType === "application/msword"
+                  ? "doc"
+                  : "jpg";
       const fileName = `${item.serviceName}.${ext}`;
       const safeBytes = new Uint8Array(bytes);
       const fileBlob = new Blob([safeBytes], { type: mimeType });
@@ -146,14 +190,12 @@ export function DocumentLibrary({ navigate: _ }: Props) {
           files: [fileObj],
         });
       } else if (navigator.share) {
-        // Fallback: share URL
         await navigator.share({
           title: item.serviceName,
           text: `Document: ${item.serviceName}`,
           url: item.blob.getDirectURL(),
         });
       } else {
-        // Fallback: download
         const a = document.createElement("a");
         a.href = URL.createObjectURL(fileObj);
         a.download = fileName;
@@ -178,7 +220,13 @@ export function DocumentLibrary({ navigate: _ }: Props) {
         ? "pdf"
         : preview.mimeType === "image/png"
           ? "png"
-          : "jpg";
+          : preview.mimeType === "image/gif"
+            ? "gif"
+            : preview.mimeType === "application/zip"
+              ? "zip"
+              : preview.mimeType === "application/msword"
+                ? "doc"
+                : "jpg";
     a.download = `${preview.name}.${ext}`;
     a.click();
   }
@@ -191,9 +239,6 @@ export function DocumentLibrary({ navigate: _ }: Props) {
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-white">Document Library</h1>
-      <p className="text-slate-400 text-sm">
-        ডকুমেন্ট আপলোড করুন এবং সরাসরি দেখুন বা শেয়ার করুন।
-      </p>
 
       {/* Upload Form */}
       <Card className="bg-slate-800 border-slate-700">
@@ -212,6 +257,32 @@ export function DocumentLibrary({ navigate: _ }: Props) {
           >
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <p className="text-sm text-slate-300 mb-1">Category *</p>
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    setCustomCategoryInput("");
+                  }}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white text-sm"
+                  required
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat}>{cat}</option>
+                  ))}
+                </select>
+                {category === "General" && (
+                  <div className="mt-2">
+                    <Input
+                      value={customCategoryInput}
+                      onChange={(e) => setCustomCategoryInput(e.target.value)}
+                      placeholder="Custom Category Name (optional)"
+                      className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
                 <p className="text-sm text-slate-300 mb-1">Service Name *</p>
                 <Input
                   value={serviceName}
@@ -221,30 +292,34 @@ export function DocumentLibrary({ navigate: _ }: Props) {
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
                 />
               </div>
-              <div>
-                <p className="text-sm text-slate-300 mb-1">Description</p>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional description"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
-                />
-              </div>
             </div>
             <div>
-              <p className="text-sm text-slate-300 mb-1">Image / PDF File *</p>
+              <p className="text-sm text-slate-300 mb-1">Description</p>
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional description"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
+              />
+            </div>
+            <div>
+              <p className="text-sm text-slate-300 mb-1">File *</p>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-2 px-3 py-2 bg-slate-700 border border-dashed border-slate-500 rounded-md text-slate-400 hover:border-amber-500 hover:text-amber-400 cursor-pointer text-sm transition-colors w-full"
               >
                 <Upload className="h-4 w-4" />
-                <span>{file ? file.name : "Click to select image or PDF"}</span>
+                <span>
+                  {file
+                    ? file.name
+                    : "Click to select any file (PDF, Image, Excel, Word...)"}
+                </span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept="*"
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
@@ -283,74 +358,81 @@ export function DocumentLibrary({ navigate: _ }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(items ?? []).map((item) => (
-            <Card
-              key={item.id}
-              className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-colors"
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="bg-amber-500/10 rounded-lg p-2">
-                    <FileText className="h-6 w-6 text-amber-400" />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-slate-500 hover:text-red-400"
-                    onClick={() => {
-                      if (confirm("Delete?")) deleteMut.mutate(item.id);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <div className="mt-3">
-                  <div className="text-white font-medium text-sm">
-                    {item.serviceName}
-                  </div>
-                  {item.description && (
-                    <div className="text-slate-400 text-xs mt-0.5">
-                      {item.description}
+          {(items ?? []).map((item) => {
+            const descStr = item.description
+              ? String(item.description)
+              : undefined;
+            const { category: itemCat, note } = parseDocDescription(descStr);
+            return (
+              <Card
+                key={item.id}
+                className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-colors"
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="bg-amber-500/10 rounded-lg p-2">
+                      <FileText className="h-6 w-6 text-amber-400" />
                     </div>
-                  )}
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-slate-600 text-slate-300 hover:bg-slate-700 flex-1 h-8"
-                    disabled={loadingId === item.id}
-                    onClick={() => handleView(item)}
-                  >
-                    {loadingId === item.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <>
-                        <FileText className="h-3.5 w-3.5 mr-1" />
-                        View
-                      </>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-slate-500 hover:text-red-400"
+                      onClick={() => {
+                        if (confirm("Delete?")) deleteMut.mutate(item.id);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-white font-medium text-sm">
+                      {item.serviceName}
+                    </div>
+                    <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      {itemCat}
+                    </span>
+                    {note && (
+                      <div className="text-slate-400 text-xs mt-1">{note}</div>
                     )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-green-700 text-green-400 hover:bg-green-900/30 flex-1 h-8"
-                    disabled={sharingId === item.id}
-                    onClick={() => handleShare(item)}
-                  >
-                    {sharingId === item.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <>
-                        <Share2 className="h-3.5 w-3.5 mr-1" />
-                        Share
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-600 text-slate-300 hover:bg-slate-700 flex-1 h-8"
+                      disabled={loadingId === item.id}
+                      onClick={() => handleView(item)}
+                    >
+                      {loadingId === item.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <FileText className="h-3.5 w-3.5 mr-1" />
+                          View
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-green-700 text-green-400 hover:bg-green-900/30 flex-1 h-8"
+                      disabled={sharingId === item.id}
+                      onClick={() => handleShare(item)}
+                    >
+                      {sharingId === item.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <Share2 className="h-3.5 w-3.5 mr-1" />
+                          Share
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -393,7 +475,23 @@ export function DocumentLibrary({ navigate: _ }: Props) {
 
           {/* Content */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-2">
-            {preview.mimeType === "application/pdf" ? (
+            {![
+              "application/pdf",
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+            ].includes(preview.mimeType) ? (
+              <div className="text-white text-center p-8">
+                <FileText className="h-16 w-16 text-amber-400 mx-auto mb-4" />
+                <p>This file type cannot be previewed.</p>
+                <Button
+                  onClick={handleDownload}
+                  className="mt-4 bg-amber-500 hover:bg-amber-600 text-slate-900"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Download File
+                </Button>
+              </div>
+            ) : preview.mimeType === "application/pdf" ? (
               <iframe
                 src={preview.url}
                 className="w-full h-full rounded"

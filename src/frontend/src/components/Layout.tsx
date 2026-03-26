@@ -16,7 +16,7 @@ import type { Page } from "../App";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { Button } from "./ui/button";
 
-const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
+const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -64,7 +64,7 @@ export function Layout({
         )}
         <div>
           <div className="font-bold text-white text-sm">DSK</div>
-          <div className="text-xs text-slate-400">Seva Kendra</div>
+          <div className="text-xs text-slate-400">Document Seva Kendra</div>
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1">

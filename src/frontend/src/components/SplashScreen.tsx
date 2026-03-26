@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
+const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const [fadeOut, setFadeOut] = useState(false);
