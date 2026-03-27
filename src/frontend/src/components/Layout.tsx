@@ -16,7 +16,7 @@ import type { Page } from "../App";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { Button } from "./ui/button";
 
-const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
+const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: LayoutDashboard },

@@ -4,7 +4,7 @@ import type { CustomerRecord, RenewalRecord } from "../backend";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 
-const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
+const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
 
 interface PrintInvoiceProps {
   customer: CustomerRecord;
@@ -75,6 +75,9 @@ export function PrintInvoice({
     window.open(waUrl, "_blank");
   }
 
+  // Absolute URL for logo so it works in print window
+  const logoAbsUrl = window.location.origin + DSK_LOGO;
+
   return (
     <div>
       {/* Invoice content - this div is captured for image sharing */}
@@ -92,7 +95,7 @@ export function PrintInvoice({
       >
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <img
-            src={DSK_LOGO}
+            src={logoAbsUrl}
             alt="DSK Logo"
             style={{
               height: 60,

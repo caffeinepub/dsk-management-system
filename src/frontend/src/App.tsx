@@ -15,7 +15,7 @@ import { QRScanner } from "./pages/QRScanner";
 import { Renewals } from "./pages/Renewals";
 import { Settings } from "./pages/Settings";
 
-const DSK_LOGO = "/assets/uploads/Picsart_25-08-06_00-27-29-094-1.png";
+const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
 
 export type Page =
   | { name: "dashboard" }
