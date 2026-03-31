@@ -3,7 +3,6 @@ import {
   DollarSign,
   FolderOpen,
   LayoutDashboard,
-  LogOut,
   Menu,
   Moon,
   QrCode,
@@ -13,7 +12,6 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Page } from "../App";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { Button } from "./ui/button";
 
 const DSK_LOGO = "/assets/uploads/dsk-logo-new.png";
@@ -43,7 +41,6 @@ export function Layout({
   darkMode,
   setDarkMode,
 }: LayoutProps) {
-  const { clear } = useInternetIdentity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
@@ -87,7 +84,7 @@ export function Layout({
           </button>
         ))}
       </nav>
-      <div className="p-3 border-t border-slate-700 space-y-1">
+      <div className="p-3 border-t border-slate-700">
         <button
           type="button"
           onClick={() => setDarkMode(!darkMode)}
@@ -99,14 +96,6 @@ export function Layout({
             <Moon className="h-4 w-4" />
           )}
           {darkMode ? "Light Mode" : "Dark Mode"}
-        </button>
-        <button
-          type="button"
-          onClick={clear}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
         </button>
       </div>
     </>

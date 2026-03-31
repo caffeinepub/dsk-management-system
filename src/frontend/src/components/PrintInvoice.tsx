@@ -1,6 +1,5 @@
-import html2canvas from "html2canvas";
 import { X } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { CustomerRecord, RenewalRecord } from "../backend";
 import { Button } from "./ui/button";
@@ -14,6 +13,15 @@ interface PrintInvoiceProps {
   onClose?: () => void;
 }
 
+type H2CFunc = (
+  el: HTMLElement,
+  opts?: Record<string, unknown>,
+) => Promise<HTMLCanvasElement>;
+
+interface WindowWithH2C {
+  html2canvas?: H2CFunc;
+}
+
 function formatDate(ts?: bigint): string {
   if (!ts) return "\u2014";
   const ms = Number(ts);
@@ -25,26 +33,138 @@ function formatDateMs(ms: number): string {
   return new Date(ms).toLocaleDateString("en-IN");
 }
 
-function printInNewWindow(invoiceEl: HTMLElement) {
-  const win = window.open("", "_blank", "width=400,height=700");
-  if (!win) return;
+/** Dynamically load html2canvas from CDN (cached after first load) */
+function loadHtml2Canvas(): Promise<H2CFunc> {
+  return new Promise((resolve, reject) => {
+    const w = window as WindowWithH2C;
+    if (typeof w.html2canvas === "function") {
+      resolve(w.html2canvas);
+      return;
+    }
+    const existing = document.querySelector("script[data-h2c]");
+    if (existing) {
+      existing.addEventListener("load", () => {
+        if (w.html2canvas) resolve(w.html2canvas);
+        else reject(new Error("html2canvas not found after load"));
+      });
+      existing.addEventListener("error", reject);
+      return;
+    }
+    const script = document.createElement("script");
+    script.setAttribute("data-h2c", "1");
+    script.src =
+      "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+    script.onload = () => {
+      if (w.html2canvas) resolve(w.html2canvas);
+      else reject(new Error("html2canvas not found after load"));
+    };
+    script.onerror = () => reject(new Error("Failed to load html2canvas"));
+    document.head.appendChild(script);
+  });
+}
+
+/** Wait for all <img> inside an element to finish loading */
+async function waitForImages(el: HTMLElement): Promise<void> {
+  const images = Array.from(el.querySelectorAll("img"));
+  await Promise.all(
+    images.map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            setTimeout(resolve, 6000);
+          }),
+    ),
+  );
+}
+
+/** Fetch a URL and return a base64 data URL */
+async function toDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function captureInvoiceAsBlob(el: HTMLElement): Promise<Blob | null> {
+  const html2canvas = await loadHtml2Canvas();
+
+  // Clone into detached div so dialog clipping doesn't interfere
+  const container = document.createElement("div");
+  container.style.cssText =
+    "position:fixed;top:-9999px;left:-9999px;z-index:0;background:#fff;";
+  const clone = el.cloneNode(true) as HTMLElement;
+  clone.style.width = `${el.scrollWidth}px`;
+  container.appendChild(clone);
+  document.body.appendChild(container);
+
+  // Replace img src with data URLs so html2canvas can access them
+  const imgs = Array.from(clone.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src");
+      if (src) {
+        const dataUrl = await toDataUrl(
+          src.startsWith("http") ? src : window.location.origin + src,
+        );
+        if (dataUrl) img.src = dataUrl;
+      }
+    }),
+  );
+
+  await waitForImages(clone);
+
+  try {
+    const canvas = await html2canvas(clone, {
+      backgroundColor: "#ffffff",
+      scale: 3,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      width: clone.scrollWidth,
+      height: clone.scrollHeight,
+    });
+    return await new Promise<Blob | null>((res) =>
+      canvas.toBlob(res, "image/png"),
+    );
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+function printThermal(invoiceEl: HTMLElement) {
+  const win = window.open("", "_blank", "width=420,height=750");
+  if (!win) {
+    toast.error("Pop-up blocked. Allow pop-ups and try again.");
+    return;
+  }
   win.document.write(`
     <html><head>
     <style>
       @page { size: 80mm auto; margin: 2mm; }
-      body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 76mm; margin: 0 auto; background: #fff; color: #111; padding: 4px; }
+      body { font-family: 'Courier New', Courier, monospace; font-size: 12px;
+             width: 76mm; margin: 0 auto; background: #fff; color: #111; padding: 4px; }
       img { max-width: 100%; }
+      @media print {
+        body { width: 76mm; }
+        @page { size: 80mm auto; margin: 1mm; }
+      }
     </style>
     </head><body>
     ${invoiceEl.innerHTML}
+    <script>window.onload=function(){window.print();setTimeout(function(){window.close();},800);}<\/script>
     </body></html>
   `);
   win.document.close();
-  win.focus();
-  setTimeout(() => {
-    win.print();
-    win.close();
-  }, 500);
 }
 
 export function PrintInvoice({
@@ -53,6 +173,9 @@ export function PrintInvoice({
   onClose,
 }: PrintInvoiceProps) {
   const invoiceRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
   const today = new Date().toLocaleDateString("en-IN");
   const invoiceNo = `DSK-INV-${c.tokenId}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(c.tokenId)}`;
@@ -68,74 +191,79 @@ export function PrintInvoice({
 
   const rupee = "\u20b9";
 
-  async function handleShare() {
+  async function handleDownloadPng() {
     if (!invoiceRef.current) return;
-    const phone = c.phone.replace(/\D/g, "");
+    setDownloading(true);
     try {
-      const canvas = await html2canvas(invoiceRef.current, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 15000,
-        logging: false,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          window.open(`https://wa.me/91${phone}`, "_blank");
-          return;
-        }
-        const file = new File([blob], "invoice.png", { type: "image/png" });
-        try {
-          if (navigator.canShare?.({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: `Invoice - ${c.name}`,
-            });
-          } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "invoice.png";
-            a.click();
-            setTimeout(() => {
-              URL.revokeObjectURL(url);
-              window.open(`https://wa.me/91${phone}`, "_blank");
-            }, 1000);
-          }
-        } catch (shareErr: unknown) {
-          if (shareErr instanceof Error && shareErr.name !== "AbortError") {
-            // Fallback: download and open WhatsApp
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "invoice.png";
-            a.click();
-            setTimeout(() => {
-              URL.revokeObjectURL(url);
-              window.open(`https://wa.me/91${phone}`, "_blank");
-            }, 1000);
-          }
-        }
-      }, "image/png");
+      const blob = await captureInvoiceAsBlob(invoiceRef.current);
+      if (!blob) throw new Error("Failed to create image");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice-${c.tokenId}-${c.name}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      toast.success("Invoice image downloaded");
     } catch {
-      // html2canvas failed — fallback to WhatsApp
-      window.open(`https://wa.me/91${phone}`, "_blank");
+      toast.error("Download failed. Try again.");
+    } finally {
+      setDownloading(false);
     }
   }
 
-  // Absolute URL for logo so it works in print window
-  const logoAbsUrl = window.location.origin + DSK_LOGO;
+  async function handleShare() {
+    if (!invoiceRef.current) return;
+    setSharing(true);
+    const phone = c.phone.replace(/\D/g, "");
+    const waPhone = phone.length >= 10 ? `91${phone.slice(-10)}` : phone;
+    try {
+      const blob = await captureInvoiceAsBlob(invoiceRef.current);
+      if (!blob) throw new Error("Could not create invoice image");
+
+      const file = new File([blob], `Invoice-${c.name}.png`, {
+        type: "image/png",
+      });
+
+      // Try Web Share API (Android Chrome / mobile browsers)
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Invoice - ${c.name}`,
+          text: `Invoice from Document Seva Kendra for ${c.name}`,
+        });
+        return;
+      }
+
+      // Fallback: download image then open WhatsApp
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice-${c.name}.png`;
+      a.click();
+      toast.success("Invoice saved! Opening WhatsApp...");
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        window.open(`https://wa.me/${waPhone}`, "_blank");
+      }, 1200);
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      // Last fallback: just open WhatsApp
+      window.open(`https://wa.me/${waPhone}`, "_blank");
+      toast.info("WhatsApp opened. Attach the downloaded invoice manually.");
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <div>
-      {/* Invoice content - this div is captured for image sharing */}
+      {/* Invoice content captured for image sharing */}
       <div
         ref={invoiceRef}
         style={{
           fontFamily: "'Courier New', Courier, monospace",
           fontSize: 12,
-          maxWidth: 320,
+          width: 304,
           margin: "0 auto",
           background: "#fff",
           color: "#111",
@@ -144,7 +272,7 @@ export function PrintInvoice({
       >
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <img
-            src={logoAbsUrl}
+            src={DSK_LOGO}
             alt="DSK Logo"
             style={{
               height: 60,
@@ -294,7 +422,7 @@ export function PrintInvoice({
         </div>
       </div>
 
-      {/* Action buttons - outside captured area */}
+      {/* Action buttons */}
       <div
         style={{
           textAlign: "center",
@@ -307,42 +435,60 @@ export function PrintInvoice({
       >
         <button
           type="button"
-          onClick={() =>
-            invoiceRef.current && printInNewWindow(invoiceRef.current)
-          }
+          onClick={() => invoiceRef.current && printThermal(invoiceRef.current)}
           style={{
             background: "#f59e0b",
             border: "none",
             borderRadius: 6,
-            padding: "8px 20px",
+            padding: "8px 16px",
             fontWeight: "bold",
             cursor: "pointer",
             fontSize: 13,
+            color: "#111",
           }}
-          data-ocid="invoice.primary_button"
         >
-          {"\uD83D\uDDB8"} Print / Save PDF
+          &#128424; Print (Thermal)
         </button>
+
         <button
           type="button"
-          onClick={handleShare}
+          onClick={handleDownloadPng}
+          disabled={downloading}
           style={{
-            background: "#25D366",
+            background: downloading ? "#6b7280" : "#3b82f6",
             color: "#fff",
             border: "none",
             borderRadius: 6,
             padding: "8px 16px",
-            cursor: "pointer",
+            cursor: downloading ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: "bold",
+          }}
+        >
+          {downloading ? "Saving..." : "\uD83D\uDCF7 Save as PNG"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={sharing}
+          style={{
+            background: sharing ? "#4ade80" : "#25D366",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "8px 16px",
+            cursor: sharing ? "not-allowed" : "pointer",
             fontSize: 13,
             fontWeight: "bold",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
           }}
-          data-ocid="invoice.secondary_button"
         >
-          {"\uD83D\uDCF2 Share as Image"}
+          {sharing ? "Sharing..." : "\uD83D\uDCF2 Share to WhatsApp"}
         </button>
+
         {onClose && (
           <button
             type="button"
@@ -406,7 +552,6 @@ export function PrintInvoiceModal({
               size="icon"
               onClick={onClose}
               className="text-slate-500 hover:text-slate-800 h-7 w-7"
-              data-ocid="invoice.close_button"
             >
               <X className="h-4 w-4" />
             </Button>

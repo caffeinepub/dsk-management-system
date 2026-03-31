@@ -14,31 +14,35 @@ export function useActor() {
     queryFn: async () => {
       const isAuthenticated = !!identity;
 
+      let actor: backendInterface;
+
       if (!isAuthenticated) {
-        return await createActorWithConfig();
+        // Create anonymous actor but still initialize admin access
+        actor = await createActorWithConfig();
+      } else {
+        const actorOptions = {
+          agentOptions: {
+            identity,
+          },
+        };
+        actor = await createActorWithConfig(actorOptions);
       }
 
-      const actorOptions = {
-        agentOptions: {
-          identity,
-        },
-      };
-
-      const actor = await createActorWithConfig(actorOptions);
-      const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      await actor._initializeAccessControlWithSecret(adminToken);
-      // Always claim admin on login to ensure permissions are set
+      // Always initialize admin access so all operations work without login
       try {
-        await actor.claimFirstAdmin();
+        const adminToken = getSecretParameter("caffeineAdminToken") || "";
+        await actor._initializeAccessControlWithSecret(adminToken);
       } catch {
-        // ignore if already claimed
+        // ignore if already initialized
       }
+
       return actor;
     },
     staleTime: Number.POSITIVE_INFINITY,
     enabled: true,
   });
 
+  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({
